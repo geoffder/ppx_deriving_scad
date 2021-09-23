@@ -1,5 +1,5 @@
 open! Ppxlib
-module List = ListLabels
+open! Base
 open! Ast_builder.Default
 
 (* standin example. I'll want to use attributes to indicate unit vectors for instance,
@@ -17,78 +17,79 @@ module Vec3 = struct
   type t = float * float * float
 
   let translate (px, py, pz) (tx, ty, tz) = px +. tx, py +. ty, pz +. tz
+  let scale (sx, sy, sz) (tx, ty, tz) = sx *. tx, sy *. ty, sz *. tz
 end
 
-type vec = { a : Vec3.t }
+module Vec2 = struct
+  type t = float * float
 
-let translator loc (td : type_declaration) fields =
-  let names =
-    let qualified = string_of_core_type (List.hd fields).pld_type in
-    let mods, name =
-      let rec last acc = function
-        | [ n ]  -> acc, n
-        | h :: t -> last (h :: acc) t
-        | []     -> [], ""
-      in
-      String.split_on_char '.' qualified |> last []
+  let translate (px, py, _) (tx, ty) = px +. tx, py +. ty
+  let scale (sx, sy, _) (tx, ty) = sx *. tx, sy *. ty
+end
+
+let ld_to_fun_id (ld : label_declaration) name =
+  let qualifiers =
+    let rec last acc = function
+      | [ n ]  ->
+        (if String.equal n "t" then name else Printf.sprintf "%s_%s" name n) :: acc
+      | h :: t -> last (h :: acc) t
+      | []     -> failwith "inaccessible"
     in
-    let name' =
-      if String.equal name "t" then "translate" else Printf.sprintf "%s_translate" name
-    in
-    List.rev (name' :: mods)
+    string_of_core_type ld.pld_type |> String.split ~on:'.' |> last [] |> List.rev
   in
-  let id =
-    match names with
-    | h :: t -> List.fold_left ~init:(lident h) ~f:(fun li m -> Longident.Ldot (li, m)) t
-    | []     -> failwith "inaccesible"
-  in
-  let field_trans (ld : label_declaration) =
-    let loc = ld.pld_loc in
-    ( { loc; txt = lident ld.pld_name.txt }
-    , pexp_apply
-        ~loc
-        (pexp_ident ~loc { loc; txt = id })
-        [ Nolabel, pexp_ident ~loc { loc; txt = lident "p" }
-        ; ( Nolabel
+  match qualifiers with
+  | h :: t -> List.fold_left ~init:(lident h) ~f:(fun li m -> Longident.Ldot (li, m)) t
+  | []     -> failwith "inaccessible"
+
+let record_entry ~name ~params (ld : label_declaration) =
+  let loc = ld.pld_loc in
+  let id = ld_to_fun_id ld name
+  and params =
+    List.fold
+      ~init:
+        [ ( Nolabel
           , pexp_field
               ~loc
               (pexp_ident ~loc { loc; txt = lident "t" })
               { loc; txt = lident ld.pld_name.txt } )
-        ] )
+        ]
+      ~f:(fun ps p -> (Nolabel, pexp_ident ~loc { loc; txt = lident p }) :: ps)
+      params
   in
+  ( { loc; txt = lident ld.pld_name.txt }
+  , pexp_apply ~loc (pexp_ident ~loc { loc; txt = id }) params )
+
+let build_fun ~loc ~params expr =
+  let f expr txt = pexp_fun ~loc Nolabel None (ppat_var ~loc { loc; txt }) expr in
+  List.fold ~init:expr ~f (List.rev params)
+
+let record_transformer ~loc ~name ~params (td : type_declaration) fields =
   let name =
     if String.equal td.ptype_name.txt "t"
-    then "translate"
-    else Printf.sprintf "%s_translate" td.ptype_name.txt
-  in
+    then name
+    else Printf.sprintf "%s_%s" name td.ptype_name.txt
+  and f = record_entry ~name ~params in
   pstr_value
     ~loc
     Nonrecursive
     [ { pvb_pat = ppat_var ~loc { loc; txt = name }
       ; pvb_expr =
-          pexp_fun
+          build_fun
             ~loc
-            Nolabel
-            None
-            (ppat_var ~loc { loc; txt = "p" })
+            ~params
             (pexp_fun
                ~loc
                Nolabel
                None
                (ppat_var ~loc { loc; txt = "t" })
-               (pexp_record ~loc (List.map ~f:field_trans fields) None) )
+               (pexp_record ~loc (List.map ~f fields) None) )
       ; pvb_attributes = []
       ; pvb_loc = loc
       }
     ]
 
-(* TODO: can I access a field in x using the name of the field with metaquot? *)
-(* This spits out what is on the other side of the equals at the moment. So I get
-     "no such pexp_field value" etc. How can I make this into an expression bound
-     to the left side. *)
-(* [%stri
- *   let [%p Ast.pvar ld.pld_name.txt] =
- *     [%expr pexp_field ~loc x { loc; txt = lident ld.pld_name.txt }]] *)
+let translator loc = record_transformer ~loc ~name:"translate" ~params:[ "p" ]
+let scaler loc = record_transformer ~loc ~name:"scale" ~params:[ "s" ]
 
 let accessor_intf ~ptype_name (ld : label_declaration) =
   let loc = ld.pld_loc in
@@ -106,13 +107,14 @@ let accessor_intf ~ptype_name (ld : label_declaration) =
     ; pval_prim = []
     }
 
-let translator_impl ~ctxt (_rec_flag, type_declarations) =
+let transformer_impl ~ctxt (_rec_flag, type_declarations) =
   let loc = Expansion_context.Deriver.derived_item_loc ctxt in
   let f (td : type_declaration) =
     match td with
     | { ptype_kind = Ptype_abstract | Ptype_variant _ | Ptype_open; _ } ->
       Location.raise_errorf ~loc "Cannot derive translators for non record types (yet)"
-    | { ptype_kind = Ptype_record fields; _ } -> [ translator loc td fields ]
+    | { ptype_kind = Ptype_record fields; _ } ->
+      [ translator loc td fields; scaler loc td fields ]
   in
   List.concat_map ~f type_declarations
 
@@ -126,7 +128,7 @@ let generate_intf ~ctxt (_rec_flag, type_declarations) =
         List.map fields ~f:(accessor_intf ~ptype_name) )
   |> List.concat
 
-let impl_generator = Deriving.Generator.V2.make_noarg translator_impl
+let impl_generator = Deriving.Generator.V2.make_noarg transformer_impl
 let intf_generator = Deriving.Generator.V2.make_noarg generate_intf
 
 let my_deriver =
