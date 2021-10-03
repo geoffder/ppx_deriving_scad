@@ -19,6 +19,12 @@ let unit_attr =
 
 (* let attributes = [ Attribute.T default_attribute ] *)
 
+(* TODO: This works, but rethink it. Need to cleanly represent the transforms with
+   types while allowing seamless adaptation to attributes (such as unit). Both name
+   and params need to change when translation functions are avoided for example.
+   Also, with inclusion of and @ignore attribute, should consider moving is_unit
+   (and ignore along with it) out of the janky names_params function here. *)
+
 type transform =
   | Translate
   | Scale
