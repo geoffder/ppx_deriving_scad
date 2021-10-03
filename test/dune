@@ -1,2 +1,5 @@
-(test
- (name ppx_deriving_scad))
+(library
+ (name ppx_deriving_scad_test)
+ (inline_tests)
+ (libraries base)
+ (preprocess (pps ppx_inline_test ppx_deriving_scad)))
