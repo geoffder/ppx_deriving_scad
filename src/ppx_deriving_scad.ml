@@ -9,7 +9,7 @@ let attrs_to_string =
    preventing them from being translated *)
 let unit_attr =
   Attribute.declare
-    "unit_vec"
+    "unit"
     Attribute.Context.label_declaration
     (* Ast_pattern.(single_expr_payload __) *)
     Ast_pattern.(pstr nil)
@@ -23,12 +23,28 @@ type transform =
   | Translate
   | Scale
   | Rotate
+  | RotateAbout
 
-let transform_to_name is_unit transform =
+let transform_to_string = function
+  | Translate   -> "translate"
+  | Scale       -> "scale"
+  | Rotate      -> "rotate"
+  | RotateAbout -> "rotate_about_pt"
+
+let transform_to_params = function
+  | Translate   -> [ "p" ]
+  | Scale       -> [ "s" ]
+  | Rotate      -> [ "r" ]
+  | RotateAbout -> [ "r"; "p" ]
+
+let transform_to_name_params is_unit transform =
   match is_unit, transform with
-  | _, Translate -> "translate"
-  | _, Scale     -> "scale"
-  | _, Rotate    -> "rotate"
+  | false, Translate   -> Some ("translate", [ "p" ])
+  | true, Translate    -> None
+  | _, Scale           -> Some ("scale", [ "s" ])
+  | _, Rotate          -> Some ("rotate", [ "r" ])
+  | false, RotateAbout -> Some ("rotate_about_pt", [ "r"; "p" ])
+  | true, RotateAbout  -> Some ("rotate", [ "r" ])
 
 let ld_to_fun_id (ld : label_declaration) name =
   let qualifiers =
@@ -44,29 +60,29 @@ let ld_to_fun_id (ld : label_declaration) name =
   | h :: t -> List.fold_left ~init:(lident h) ~f:(fun li m -> Longident.Ldot (li, m)) t
   | []     -> failwith "inaccessible"
 
-let record_entry ~name ~params (ld : label_declaration) =
+let record_entry ~transform (ld : label_declaration) =
   let loc = ld.pld_loc in
-  let id = ld_to_fun_id ld name
-  and params =
-    List.fold
-      ~init:
-        [ ( Nolabel
-          , pexp_field
-              ~loc
-              (pexp_ident ~loc { loc; txt = lident "t" })
-              { loc; txt = lident ld.pld_name.txt } )
-        ]
-      ~f:(fun ps p -> (Nolabel, pexp_ident ~loc { loc; txt = lident p }) :: ps)
-      params
-  in
-  ( { loc; txt = lident ld.pld_name.txt }
-  , pexp_apply ~loc (pexp_ident ~loc { loc; txt = id }) params )
+  let is_unit = Option.is_some @@ Attribute.get unit_attr ld
+  and field_id = { loc; txt = lident ld.pld_name.txt } in
+  let field_expr = pexp_field ~loc (pexp_ident ~loc { loc; txt = lident "t" }) field_id in
+  match transform_to_name_params is_unit transform with
+  | Some (name, params) ->
+    let id = ld_to_fun_id ld name
+    and params =
+      List.fold
+        ~init:[ Nolabel, field_expr ]
+        ~f:(fun ps p -> (Nolabel, pexp_ident ~loc { loc; txt = lident p }) :: ps)
+        (List.rev params)
+    in
+    field_id, pexp_apply ~loc (pexp_ident ~loc { loc; txt = id }) params
+  | None                -> field_id, field_expr
 
 let build_fun ~loc ~params expr =
   let f expr txt = pexp_fun ~loc Nolabel None (ppat_var ~loc { loc; txt }) expr in
   List.fold ~init:expr ~f (List.rev params)
 
-let record_transformer ~loc ~name ~params (td : type_declaration) fields =
+let record_transformer ~loc ~transform (td : type_declaration) fields =
+  let name = transform_to_string transform in
   let oc = Stdio.Out_channel.create ("../../" ^ name ^ "_logs") in
   let label_attrs =
     List.fold
@@ -87,7 +103,7 @@ let record_transformer ~loc ~name ~params (td : type_declaration) fields =
     if String.equal td.ptype_name.txt "t"
     then name
     else Printf.sprintf "%s_%s" name td.ptype_name.txt
-  and f = record_entry ~name ~params in
+  and f = record_entry ~transform in
   pstr_value
     ~loc
     Nonrecursive
@@ -95,7 +111,7 @@ let record_transformer ~loc ~name ~params (td : type_declaration) fields =
       ; pvb_expr =
           build_fun
             ~loc
-            ~params
+            ~params:(transform_to_params transform)
             (pexp_fun
                ~loc
                Nolabel
@@ -107,8 +123,10 @@ let record_transformer ~loc ~name ~params (td : type_declaration) fields =
       }
     ]
 
-let translator loc = record_transformer ~loc ~name:"translate" ~params:[ "p" ]
-let scaler loc = record_transformer ~loc ~name:"scale" ~params:[ "s" ]
+let translator loc = record_transformer ~loc ~transform:Translate
+let scaler loc = record_transformer ~loc ~transform:Scale
+let rotater loc = record_transformer ~loc ~transform:Rotate
+let rotate_abouter loc = record_transformer ~loc ~transform:RotateAbout
 
 let accessor_intf ~ptype_name (ld : label_declaration) =
   let loc = ld.pld_loc in
@@ -139,7 +157,11 @@ let transformer_impl ~ctxt (_rec_flag, type_declarations) =
         "%s attributes: %s\n"
         ptype_name.txt
         (attrs_to_string ptype_attributes);
-      [ translator loc td fields; scaler loc td fields ]
+      [ translator loc td fields
+      ; scaler loc td fields
+      ; rotater loc td fields
+      ; rotate_abouter loc td fields
+      ]
   in
   let a = List.concat_map ~f type_declarations in
   Stdio.Out_channel.close oc;
