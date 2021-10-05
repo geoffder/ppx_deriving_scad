@@ -153,7 +153,7 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
         ~loc
         "Deriving scad transformers for non-record types is not supported."
     | { ptype_kind = Ptype_record _; ptype_name; ptype_params; _ } ->
-      let f transform =
+      let gen_sig transform =
         let name =
           let func_name = transform_to_string transform in
           if String.equal td.ptype_name.txt "t"
@@ -189,7 +189,7 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
           ; pval_prim = []
           }
       in
-      List.map ~f transforms
+      List.map ~f:gen_sig transforms
   in
   List.concat_map ~f type_declarations
 
