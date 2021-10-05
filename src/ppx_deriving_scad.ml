@@ -138,11 +138,9 @@ let transformer_impl ~ctxt (_rec_flag, type_declarations) =
   in
   List.concat_map ~f type_declarations
 
-let module_type_arrow ~loc name =
-  ptyp_arrow
-    ~loc
-    Nolabel
-    (ptyp_constr ~loc { loc; txt = Longident.Ldot (lident name, "t") } [])
+let scad_type_arrow ~loc name =
+  let txt = Longident.Ldot (Longident.Ldot (lident "Scad_ml", name), "t") in
+  ptyp_arrow ~loc Nolabel (ptyp_constr ~loc { loc; txt } [])
 
 let transformer_intf ~ctxt (_rec_flag, type_declarations) =
   let loc = Expansion_context.Deriver.derived_item_loc ctxt in
@@ -171,14 +169,12 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
         let pval_type =
           match transform with
           | RotateAbout     ->
-            let arrow = module_type_arrow ~loc "Vec3" in
+            let arrow = scad_type_arrow ~loc "Vec3" in
             arrow @@ arrow last_arrow
-          | Quaternion      -> module_type_arrow ~loc "Quaternion" @@ last_arrow
+          | Quaternion      -> scad_type_arrow ~loc "Quaternion" @@ last_arrow
           | QuaternionAbout ->
-            module_type_arrow ~loc "Quaternion"
-            @@ module_type_arrow ~loc "Vec3"
-            @@ last_arrow
-          | _               -> module_type_arrow ~loc "Vec3" @@ last_arrow
+            scad_type_arrow ~loc "Quaternion" @@ scad_type_arrow ~loc "Vec3" @@ last_arrow
+          | _               -> scad_type_arrow ~loc "Vec3" @@ last_arrow
         in
         psig_value
           ~loc

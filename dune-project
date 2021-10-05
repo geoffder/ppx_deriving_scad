@@ -8,5 +8,5 @@
 (maintainers "Geoff deRosenroll<geoffderosenroll@gmail.com>")
 (package
   (name ppx_deriving_scad)
-  (synopsis "")
+  (synopsis "PPX deriver for Scad_ml transformation functions.")
   (description ""))
