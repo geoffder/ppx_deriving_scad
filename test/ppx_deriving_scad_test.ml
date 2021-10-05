@@ -1,26 +1,6 @@
 open Base
 open Scad_ml
 
-module Vec2 = struct
-  type t = float * float
-
-  let negate (x, y, z) = -.x, -.y, -.z
-
-  let equal (ax, ay) (bx, by) =
-    let open Float in
-    ax = bx && ay = by
-
-  let translate (px, py, _) (tx, ty) = px +. tx, py +. ty
-  let scale (sx, sy, _) (tx, ty) = sx *. tx, sy *. ty
-
-  let rotate (_, _, r) (x, y) =
-    let s = Float.sin r in
-    let c = Float.cos r in
-    (c *. x) -. (s *. y), (s *. x) +. (c *. y)
-
-  let rotate_about_pt r p t = translate p t |> rotate r |> translate (negate p)
-end
-
 type vec_pair =
   { reg : Vec3.t
   ; unit : Vec3.t [@scad.unit]
