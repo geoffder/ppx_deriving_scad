@@ -54,12 +54,12 @@ let transform_drop_about = function
 let transform_to_names is_unit transform =
   match is_unit, transform with
   | true, (Translate | Scale) -> None
-  | _, trans                  -> Some
+  | false, trans              -> Some
                                    ( transform_to_string trans
                                    , transform_to_rev_params trans )
-(* | true, trans               ->
- *   let trans' = transform_drop_about trans in
- *   Some (transform_to_string trans', transform_to_rev_params trans') *)
+  | true, trans               ->
+    let trans' = transform_drop_about trans in
+    Some (transform_to_string trans', transform_to_rev_params trans')
 
 let ld_to_fun_id (ld : label_declaration) name =
   let qualifiers =
