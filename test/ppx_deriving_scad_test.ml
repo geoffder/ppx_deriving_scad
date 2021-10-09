@@ -27,6 +27,14 @@ end = struct
   [@@deriving scad]
 end
 
+module Pts = struct
+  type t = { pts : Vec3.t list } [@@deriving scad]
+end
+
+module OptOpt = struct
+  type t = { vec : Vec3.t option option } [@@deriving scad]
+end
+
 let%test "rotate_about_pair" =
   let a = { reg = 5., 5., 0.; unit = 0., 1., 0. }
   and r = 0., 0., Float.pi /. 2.
@@ -46,3 +54,15 @@ let%test "ignored" =
   and p = 1., 1., 1. in
   let trans = translate_with_ignored p a in
   Vec3.equal trans.vector (Vec3.translate p a.vector) && a.ignored = trans.ignored
+
+let%test "translate_points" =
+  let a = Pts.{ pts = [ Vec3.zero; Vec3.zero; Vec3.zero ] }
+  and p = 1., 1., 1. in
+  let trans = Pts.translate p a in
+  List.equal Vec3.equal (List.map ~f:(Vec3.add p) a.pts) trans.pts
+
+let%test "translate_opt_opt" =
+  let a = OptOpt.{ vec = Some (Some Vec3.zero) }
+  and p = 1., 1., 1. in
+  let trans = OptOpt.translate p a in
+  Vec3.equal p Option.(value ~default:Vec3.zero @@ join trans.vec)

@@ -2,6 +2,10 @@ open! Ppxlib
 open! Base
 open! Ast_builder.Default
 
+(* TODO:
+   - support for 2d and 3d types in gadt version of scad-ml?
+*)
+
 let unit_attr =
   Attribute.declare
     "scad.unit"
@@ -61,18 +65,42 @@ let transform_to_names is_unit transform =
     let trans' = transform_drop_about trans in
     Some (transform_to_string trans', transform_to_rev_params trans')
 
-let ld_to_fun_id (ld : label_declaration) name =
-  let qualifiers =
+let option_map ~loc expr =
+  [%expr
+    function
+    | Some opt -> Some ([%e expr] opt)
+    | None     -> None]
+
+let list_map ~loc expr =
+  [%expr
+    let rec aux acc = function
+      | h :: t -> aux ([%e expr] h :: acc) t
+      | []     -> acc
+    in
+    aux []]
+
+(* TODO: this should be renamed to go along with the addition of functor type name
+   handling *)
+let ld_to_fun_id_and_functors (ld : label_declaration) name =
+  let qualifiers, functors =
+    let qualified, functors =
+      string_of_core_type ld.pld_type
+      |> String.split ~on:' '
+      |> function
+      | h :: t -> h, t
+      | []     -> failwith "inaccessible"
+    in
     let rec last acc = function
       | [ n ]  ->
         (if String.equal n "t" then name else Printf.sprintf "%s_%s" name n) :: acc
       | h :: t -> last (h :: acc) t
       | []     -> failwith "inaccessible"
     in
-    string_of_core_type ld.pld_type |> String.split ~on:'.' |> last [] |> List.rev
+    qualified |> String.split ~on:'.' |> last [] |> List.rev, functors
   in
   match qualifiers with
-  | h :: t -> List.fold_left ~init:(lident h) ~f:(fun li m -> Longident.Ldot (li, m)) t
+  | h :: t ->
+    List.fold_left ~init:(lident h) ~f:(fun li m -> Longident.Ldot (li, m)) t, functors
   | []     -> failwith "inaccessible"
 
 let record_entry ~transform (ld : label_declaration) =
@@ -83,14 +111,22 @@ let record_entry ~transform (ld : label_declaration) =
   let field_expr = pexp_field ~loc (pexp_ident ~loc { loc; txt = lident "t" }) field_id in
   match Option.(transform_to_names is_unit transform >>= some_if (not ignored)) with
   | Some (name, params) ->
-    let id = ld_to_fun_id ld name
+    let id, functors = ld_to_fun_id_and_functors ld name
     and params =
       List.fold
-        ~init:[ Nolabel, field_expr ]
+        ~init:[]
         ~f:(fun ps p -> (Nolabel, pexp_ident ~loc { loc; txt = lident p }) :: ps)
         params
     in
-    field_id, pexp_apply ~loc (pexp_ident ~loc { loc; txt = id }) params
+    let expr =
+      let f expr = function
+        | "option" | "Option.t" -> [%expr [%e option_map ~loc expr]]
+        | "list" | "List.t"     -> [%expr [%e list_map ~loc expr]]
+        | _                     -> Location.raise_errorf ~loc "Unsupported functor type."
+      and transform_expr = pexp_apply ~loc (pexp_ident ~loc { loc; txt = id }) params in
+      List.fold ~f ~init:transform_expr functors
+    in
+    field_id, [%expr [%e expr] [%e field_expr]]
   | None                -> field_id, field_expr
 
 let build_fun ~loc ~params expr =
