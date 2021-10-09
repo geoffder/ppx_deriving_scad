@@ -35,6 +35,12 @@ module OptOpt = struct
   type t = { vec : Vec3.t option option } [@@deriving scad]
 end
 
+module VecMap : sig
+  type t = { map : Vec3.t Map.M(Int).t [@scad.jane] } [@@deriving scad]
+end = struct
+  type t = { map : Vec3.t Map.M(Int).t [@scad.jane] } [@@deriving scad]
+end
+
 let%test "rotate_about_pair" =
   let a = { reg = 5., 5., 0.; unit = 0., 1., 0. }
   and r = 0., 0., Float.pi /. 2.

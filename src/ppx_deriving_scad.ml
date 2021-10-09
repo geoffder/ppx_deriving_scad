@@ -20,6 +20,13 @@ let ignore_attr =
     Ast_pattern.(pstr nil)
     ()
 
+let jane_attr =
+  Attribute.declare
+    "scad.jane"
+    Attribute.Context.label_declaration
+    Ast_pattern.(pstr nil)
+    ()
+
 type transform =
   | Translate
   | Scale
@@ -79,8 +86,11 @@ let list_map ~loc expr =
     in
     aux []]
 
-(* TODO: this should be renamed to go along with the addition of functor type name
-   handling *)
+let is_map s = Str.string_match (Str.regexp "Map") s 0
+
+let map_map ~jane ~loc expr =
+  if jane then [%expr Map.map ~f:[%e expr]] else [%expr Map.map [%e expr]]
+
 let ld_to_fun_id_and_functors (ld : label_declaration) name =
   let qualifiers, functors =
     let qualified, functors =
@@ -107,6 +117,7 @@ let record_entry ~transform (ld : label_declaration) =
   let loc = ld.pld_loc in
   let is_unit = Option.is_some @@ Attribute.get unit_attr ld
   and ignored = Option.is_some @@ Attribute.get ignore_attr ld
+  and jane = Option.is_some @@ Attribute.get jane_attr ld
   and field_id = { loc; txt = lident ld.pld_name.txt } in
   let field_expr = pexp_field ~loc (pexp_ident ~loc { loc; txt = lident "t" }) field_id in
   match Option.(transform_to_names is_unit transform >>= some_if (not ignored)) with
@@ -121,8 +132,9 @@ let record_entry ~transform (ld : label_declaration) =
     let expr =
       let f expr = function
         | "option" | "Option.t" -> [%expr [%e option_map ~loc expr]]
-        | "list" | "List.t"     -> [%expr [%e list_map ~loc expr]]
-        | _                     -> Location.raise_errorf ~loc "Unsupported functor type."
+        | "list" | "List.t" -> [%expr [%e list_map ~loc expr]]
+        | s when is_map s -> [%expr [%e map_map ~jane ~loc expr]]
+        | s -> Location.raise_errorf ~loc "Unsupported functor type: %s" s
       and transform_expr = pexp_apply ~loc (pexp_ident ~loc { loc; txt = id }) params in
       List.fold ~f ~init:transform_expr functors
     in

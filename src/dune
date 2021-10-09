@@ -2,5 +2,5 @@
  (name ppx_deriving_scad)
  (public_name ppx_deriving_scad)
  (kind ppx_deriver)
- (libraries base ppxlib stdio)
+ (libraries base ppxlib stdio str)
  (preprocess (pps ppxlib.metaquot)))
