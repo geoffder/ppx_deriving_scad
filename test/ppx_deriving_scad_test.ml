@@ -41,15 +41,19 @@ end = struct
   type t = { map : Vec3.t Map.M(Int).t [@scad.jane] } [@@deriving scad]
 end
 
-(* module PolyType = struct
- *   type 'a p =
- *     { a : 'a [@scad.ignore]
- *     ; v : Vec3.t
- *     }
- *   [@@deriving scad]
- *
- *   type 'a t = { p : 'a p } [@@deriving scad]
- * end *)
+module VecRes = struct
+  type t = { res : (Vec3.t, string) Result.t } [@@deriving scad]
+end
+
+module PolyType = struct
+  type 'a p =
+    { a : 'a [@scad.ignore]
+    ; v : Vec3.t
+    }
+  [@@deriving scad]
+
+  type 'a t = { p : 'a p } [@@deriving scad]
+end
 
 let%test "rotate_about_pair" =
   let a = { reg = 5., 5., 0.; unit = 0., 1., 0. }

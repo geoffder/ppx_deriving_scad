@@ -72,11 +72,23 @@ let transform_to_names is_unit transform =
     let trans' = transform_drop_about trans in
     Some (transform_to_string trans', transform_to_rev_params trans')
 
+type functors =
+  | Option
+  | Result
+  | List
+  | Map
+
 let option_map ~loc expr =
   [%expr
     function
     | Some opt -> Some ([%e expr] opt)
     | None     -> None]
+
+let result_map ~loc expr =
+  [%expr
+    function
+    | Ok ok -> Ok ([%e expr] ok)
+    | err   -> err]
 
 let list_map ~loc expr =
   [%expr
@@ -124,7 +136,7 @@ let fun_id name lid =
   | Ldot (p, s) -> Ldot (p, maybe_suffix s)
   | Lapply _    -> assert false
 
-let ld_to_fun_id_and_functors (ld : label_declaration) name =
+let ld_to_fun_id_and_functors_old (ld : label_declaration) name =
   let qualifiers, functors =
     let qualified, functors =
       string_of_core_type ld.pld_type
@@ -146,7 +158,7 @@ let ld_to_fun_id_and_functors (ld : label_declaration) name =
     List.fold_left ~init:(lident h) ~f:(fun li m -> Longident.Ldot (li, m)) t, functors
   | []     -> failwith "inaccessible"
 
-let ld_to_fun_id_and_functors' (ld : label_declaration) name =
+let ld_to_fun_id_and_functors (ld : label_declaration) name =
   (* TODO:
      - need to figure out how to handle the case when the last type, which I
        actually want to handle, has args. Right now I drill past it and fail. I
@@ -159,17 +171,30 @@ let ld_to_fun_id_and_functors' (ld : label_declaration) name =
      - can I build up an expression like they do, instead of my horrific
        "functor" label collecting?
      - https://github.com/ocaml-ppx/ppx_deriving_yojson/blob/master/src/ppx_deriving_yojson.ml#L123*)
-  let rec id_of_typ funcs = function
+  let loc = ld.pld_loc
+  and is_constr = function
+    | { ptyp_desc = Ptyp_constr _; _ } -> true
+    | _ -> false
+  in
+  let rec id_of_typ funcs next =
+    match next with
     | [%type: [%t? typ] option] | [%type: [%t? typ] Option.t] ->
-      id_of_typ ("option" :: funcs) typ
-    | [%type: [%t? typ] list] | [%type: [%t? typ] List.t] ->
-      id_of_typ ("list" :: funcs) typ
+      id_of_typ (Option :: funcs) typ
+    | [%type: [%t? typ] list] | [%type: [%t? typ] List.t] -> id_of_typ (List :: funcs) typ
+    | [%type: ([%t? typ], [%t? _]) result] | [%type: ([%t? typ], [%t? _]) Result.t] ->
+      id_of_typ (Result :: funcs) typ
     | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, []); _ } -> fun_id name lid, funcs
-    | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, [ arg ]); _ } ->
-      (* NOTE: I know. This is just trying things out since record_entry uses these. *)
-      let funcs' = if lid_contains lid "Map" then "Map" :: funcs else funcs in
-      id_of_typ funcs' arg
-    | _ -> assert false
+    | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, (arg :: _ as args)); _ } ->
+      if List.for_all ~f:(Fn.non is_constr) args
+      then fun_id name lid, funcs
+      else
+        (* NOTE: I know. This is just trying things out since record_entry uses these. *)
+        id_of_typ (if lid_contains lid "Map" then Map :: funcs else funcs) arg
+    | { ptyp_desc = Ptyp_poly (_, typ); _ } ->
+      Location.raise_errorf ~loc "Fail on poly: %s" (string_of_core_type typ)
+    | { ptyp_desc = Ptyp_var name; _ } ->
+      Location.raise_errorf ~loc "Fail on Ptyp_var: %s" name
+    | _ -> Location.raise_errorf ~loc "id_of_typ failure"
   in
   id_of_typ [] ld.pld_type
 
@@ -182,7 +207,7 @@ let record_entry ~transform (ld : label_declaration) =
   let field_expr = pexp_field ~loc (pexp_ident ~loc { loc; txt = lident "t" }) field_id in
   match Option.(transform_to_names is_unit transform >>= some_if (not ignored)) with
   | Some (name, params) ->
-    let id, functors = ld_to_fun_id_and_functors' ld name
+    let id, functors = ld_to_fun_id_and_functors ld name
     and params =
       List.fold
         ~init:[]
@@ -191,10 +216,10 @@ let record_entry ~transform (ld : label_declaration) =
     in
     let expr =
       let f expr = function
-        | "option" | "Option.t" -> [%expr [%e option_map ~loc expr]]
-        | "list" | "List.t" -> [%expr [%e list_map ~loc expr]]
-        | s when is_map s -> [%expr [%e map_map ~jane ~loc expr]]
-        | s -> Location.raise_errorf ~loc "Unsupported functor type: %s" s
+        | Option -> [%expr [%e option_map ~loc expr]]
+        | List   -> [%expr [%e list_map ~loc expr]]
+        | Result -> [%expr [%e result_map ~loc expr]]
+        | Map    -> [%expr [%e map_map ~jane ~loc expr]]
       and transform_expr = pexp_apply ~loc (pexp_ident ~loc { loc; txt = id }) params in
       List.fold ~f ~init:transform_expr functors
     in
