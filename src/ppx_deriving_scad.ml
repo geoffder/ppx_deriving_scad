@@ -4,6 +4,8 @@ open! Ast_builder.Default
 
 (* TODO:
    - support for 2d and 3d types in gadt version of scad-ml?
+   - support for non-record types. Would be nice to have for naked Maps
+     (Columns.t being the first one from the bottom up in dometyl)
 *)
 
 let unit_attr =
@@ -160,14 +162,6 @@ let ld_to_fun_id_and_functors_old (ld : label_declaration) name =
 
 let ld_to_fun_id_and_functors (ld : label_declaration) name =
   (* TODO:
-     - need to figure out how to handle the case when the last type, which I
-       actually want to handle, has args. Right now I drill past it and fail. I
-       think in the case of PolyType (and KeyHole), the last one is a Ptype_var?
-       Test it out.
-     - Also, how to deal with multiple type args, right now I am only doing one.
-     - How do I know which one to follow down? Always the first one?
-     - in deriving yojson, they map over the args, then apply the to_yojson id
-       to it, which I don't really understand.
      - can I build up an expression like they do, instead of my horrific
        "functor" label collecting?
      - https://github.com/ocaml-ppx/ppx_deriving_yojson/blob/master/src/ppx_deriving_yojson.ml#L123*)
@@ -187,9 +181,7 @@ let ld_to_fun_id_and_functors (ld : label_declaration) name =
     | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, (arg :: _ as args)); _ } ->
       if List.for_all ~f:(Fn.non is_constr) args
       then fun_id name lid, funcs
-      else
-        (* NOTE: I know. This is just trying things out since record_entry uses these. *)
-        id_of_typ (if lid_contains lid "Map" then Map :: funcs else funcs) arg
+      else id_of_typ (if lid_contains lid "Map" then Map :: funcs else funcs) arg
     | { ptyp_desc = Ptyp_poly (_, typ); _ } ->
       Location.raise_errorf ~loc "Fail on poly: %s" (string_of_core_type typ)
     | { ptyp_desc = Ptyp_var name; _ } ->
@@ -198,6 +190,9 @@ let ld_to_fun_id_and_functors (ld : label_declaration) name =
   in
   id_of_typ [] ld.pld_type
 
+(* TODO:
+   Need to factor of the function generation using the fun_id code etc so that I can
+   use it for non-record types as well (e.g. bare maps / lists etc). *)
 let record_entry ~transform (ld : label_declaration) =
   let loc = ld.pld_loc in
   let is_unit = Option.is_some @@ Attribute.get unit_attr ld
