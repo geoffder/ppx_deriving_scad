@@ -88,8 +88,41 @@ let list_map ~loc expr =
 
 let is_map s = Str.string_match (Str.regexp "Map") s 0
 
+let rec is_lid_map = function
+  | Lident s      -> is_map s
+  | Ldot (p, _)   -> is_lid_map p
+  | Lapply (a, b) -> is_lid_map a || is_lid_map b
+
+let lid_contains lid name =
+  let str s = Str.string_match (Str.regexp name) s 0 in
+  let rec aux = function
+    | Lident s      -> str s
+    | Ldot (p, _)   -> aux p
+    | Lapply (a, b) -> aux a || aux b
+  in
+  aux lid
+
 let map_map ~jane ~loc expr =
   if jane then [%expr Map.map ~f:[%e expr]] else [%expr Map.map [%e expr]]
+
+(* let core_to_strings (c : core_type) =
+ *   let loop acc = function
+ *     | Ptyp_constr (_, cs) -> List.map ~f:string_of_core_type cs :: acc
+ *     | _                   -> acc
+ *   in
+ *   loop [] c.ptyp_desc
+ *   |> List.fold ~init:"" ~f:(fun s l ->
+ *          Printf.sprintf "%s\n%s" s (String.concat ~sep:"; " l) ) *)
+(* let core_to_strings _ = "test test test" *)
+
+let fun_id name lid =
+  let maybe_suffix s =
+    if String.equal s "t" then name else Printf.sprintf "%s_%s" name s
+  in
+  match lid with
+  | Lident s    -> Lident (maybe_suffix s)
+  | Ldot (p, s) -> Ldot (p, maybe_suffix s)
+  | Lapply _    -> assert false
 
 let ld_to_fun_id_and_functors (ld : label_declaration) name =
   let qualifiers, functors =
@@ -113,6 +146,33 @@ let ld_to_fun_id_and_functors (ld : label_declaration) name =
     List.fold_left ~init:(lident h) ~f:(fun li m -> Longident.Ldot (li, m)) t, functors
   | []     -> failwith "inaccessible"
 
+let ld_to_fun_id_and_functors' (ld : label_declaration) name =
+  (* TODO:
+     - need to figure out how to handle the case when the last type, which I
+       actually want to handle, has args. Right now I drill past it and fail. I
+       think in the case of PolyType (and KeyHole), the last one is a Ptype_var?
+       Test it out.
+     - Also, how to deal with multiple type args, right now I am only doing one.
+     - How do I know which one to follow down? Always the first one?
+     - in deriving yojson, they map over the args, then apply the to_yojson id
+       to it, which I don't really understand.
+     - can I build up an expression like they do, instead of my horrific
+       "functor" label collecting?
+     - https://github.com/ocaml-ppx/ppx_deriving_yojson/blob/master/src/ppx_deriving_yojson.ml#L123*)
+  let rec id_of_typ funcs = function
+    | [%type: [%t? typ] option] | [%type: [%t? typ] Option.t] ->
+      id_of_typ ("option" :: funcs) typ
+    | [%type: [%t? typ] list] | [%type: [%t? typ] List.t] ->
+      id_of_typ ("list" :: funcs) typ
+    | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, []); _ } -> fun_id name lid, funcs
+    | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, [ arg ]); _ } ->
+      (* NOTE: I know. This is just trying things out since record_entry uses these. *)
+      let funcs' = if lid_contains lid "Map" then "Map" :: funcs else funcs in
+      id_of_typ funcs' arg
+    | _ -> assert false
+  in
+  id_of_typ [] ld.pld_type
+
 let record_entry ~transform (ld : label_declaration) =
   let loc = ld.pld_loc in
   let is_unit = Option.is_some @@ Attribute.get unit_attr ld
@@ -122,7 +182,7 @@ let record_entry ~transform (ld : label_declaration) =
   let field_expr = pexp_field ~loc (pexp_ident ~loc { loc; txt = lident "t" }) field_id in
   match Option.(transform_to_names is_unit transform >>= some_if (not ignored)) with
   | Some (name, params) ->
-    let id, functors = ld_to_fun_id_and_functors ld name
+    let id, functors = ld_to_fun_id_and_functors' ld name
     and params =
       List.fold
         ~init:[]
