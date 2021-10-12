@@ -35,10 +35,18 @@ module OptOpt = struct
   type t = { vec : Vec3.t option option } [@@deriving scad]
 end
 
-module VecMap : sig
-  type t = { map : Vec3.t Map.M(Int).t [@scad.jane] } [@@deriving scad]
+module IntMap = Caml.Map.Make (Int)
+
+module VecStdMap : sig
+  type t = { map : Vec3.t IntMap.t [@scad.map] } [@@deriving scad]
 end = struct
-  type t = { map : Vec3.t Map.M(Int).t [@scad.jane] } [@@deriving scad]
+  type t = { map : Vec3.t IntMap.t [@scad.map] } [@@deriving scad]
+end
+
+module VecJaneMap : sig
+  type t = { map : Vec3.t Map.M(Int).t [@scad.mapf] } [@@deriving scad]
+end = struct
+  type t = { map : Vec3.t Map.M(Int).t [@scad.mapf] } [@@deriving scad]
 end
 
 module VecRes = struct

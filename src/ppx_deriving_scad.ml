@@ -22,9 +22,16 @@ let ignore_attr =
     Ast_pattern.(pstr nil)
     ()
 
-let jane_attr =
+let map_attr =
   Attribute.declare
-    "scad.jane"
+    "scad.map"
+    Attribute.Context.label_declaration
+    Ast_pattern.(pstr nil)
+    ()
+
+let mapf_attr =
+  Attribute.declare
+    "scad.mapf"
     Attribute.Context.label_declaration
     Ast_pattern.(pstr nil)
     ()
@@ -74,12 +81,6 @@ let transform_to_names is_unit transform =
     let trans' = transform_drop_about trans in
     Some (transform_to_string trans', transform_to_rev_params trans')
 
-type functors =
-  | Option
-  | Result
-  | List
-  | Map
-
 let option_map ~loc expr =
   [%expr
     function
@@ -116,19 +117,6 @@ let lid_contains lid name =
   in
   aux lid
 
-let map_map ~jane ~loc expr =
-  if jane then [%expr Map.map ~f:[%e expr]] else [%expr Map.map [%e expr]]
-
-(* let core_to_strings (c : core_type) =
- *   let loop acc = function
- *     | Ptyp_constr (_, cs) -> List.map ~f:string_of_core_type cs :: acc
- *     | _                   -> acc
- *   in
- *   loop [] c.ptyp_desc
- *   |> List.fold ~init:"" ~f:(fun s l ->
- *          Printf.sprintf "%s\n%s" s (String.concat ~sep:"; " l) ) *)
-(* let core_to_strings _ = "test test test" *)
-
 let fun_id name lid =
   let maybe_suffix s =
     if String.equal s "t" then name else Printf.sprintf "%s_%s" name s
@@ -138,88 +126,81 @@ let fun_id name lid =
   | Ldot (p, s) -> Ldot (p, maybe_suffix s)
   | Lapply _    -> assert false
 
-let ld_to_fun_id_and_functors_old (ld : label_declaration) name =
-  let qualifiers, functors =
-    let qualified, functors =
-      string_of_core_type ld.pld_type
-      |> String.split ~on:' '
-      |> function
-      | h :: t -> h, t
-      | []     -> failwith "inaccessible"
-    in
-    let rec last acc = function
-      | [ n ]  ->
-        (if String.equal n "t" then name else Printf.sprintf "%s_%s" name n) :: acc
-      | h :: t -> last (h :: acc) t
-      | []     -> failwith "inaccessible"
-    in
-    qualified |> String.split ~on:'.' |> last [] |> List.rev, functors
-  in
-  match qualifiers with
-  | h :: t ->
-    List.fold_left ~init:(lident h) ~f:(fun li m -> Longident.Ldot (li, m)) t, functors
-  | []     -> failwith "inaccessible"
+let rec is_jane_map = function
+  | Lident s      -> String.equal "Map" s
+  | Ldot (p, _)   -> is_jane_map p
+  | Lapply (a, b) -> is_jane_map a || is_jane_map b
 
-let ld_to_fun_id_and_functors (ld : label_declaration) name =
-  (* TODO:
-     - can I build up an expression like they do, instead of my horrific
-       "functor" label collecting?
-     - https://github.com/ocaml-ppx/ppx_deriving_yojson/blob/master/src/ppx_deriving_yojson.ml#L123*)
+let map ~lid ~jane ~loc expr =
+  let lid = if jane && is_jane_map lid then Longident.Ldot (lident "Map", "t") else lid in
+  let id = pexp_ident ~loc @@ { loc; txt = fun_id "map" lid } in
+  if jane then [%expr [%e id] ~f:[%e expr]] else [%expr [%e id] [%e expr]]
+
+let transform_expr ~transform (ld : label_declaration) =
   let loc = ld.pld_loc
+  and is_unit = Option.is_some @@ Attribute.get unit_attr ld
+  and ignored = Option.is_some @@ Attribute.get ignore_attr ld
+  and mappable =
+    if Option.is_some @@ Attribute.get map_attr ld
+    then Some false
+    else if Option.is_some @@ Attribute.get mapf_attr ld
+    then Some true
+    else None
   and is_constr = function
     | { ptyp_desc = Ptyp_constr _; _ } -> true
     | _ -> false
   in
-  let rec id_of_typ funcs next =
-    match next with
-    | [%type: [%t? typ] option] | [%type: [%t? typ] Option.t] ->
-      id_of_typ (Option :: funcs) typ
-    | [%type: [%t? typ] list] | [%type: [%t? typ] List.t] -> id_of_typ (List :: funcs) typ
-    | [%type: ([%t? typ], [%t? _]) result] | [%type: ([%t? typ], [%t? _]) Result.t] ->
-      id_of_typ (Result :: funcs) typ
-    | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, []); _ } -> fun_id name lid, funcs
-    | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, (arg :: _ as args)); _ } ->
-      if List.for_all ~f:(Fn.non is_constr) args
-      then fun_id name lid, funcs
-      else id_of_typ (if lid_contains lid "Map" then Map :: funcs else funcs) arg
-    | { ptyp_desc = Ptyp_poly (_, typ); _ } ->
-      Location.raise_errorf ~loc "Fail on poly: %s" (string_of_core_type typ)
-    | { ptyp_desc = Ptyp_var name; _ } ->
-      Location.raise_errorf ~loc "Fail on Ptyp_var: %s" name
-    | _ -> Location.raise_errorf ~loc "id_of_typ failure"
+  let f (name, params) =
+    let inner_expr name lid =
+      let params =
+        List.fold
+          ~init:[]
+          ~f:(fun ps p -> (Nolabel, pexp_ident ~loc { loc; txt = lident p }) :: ps)
+          params
+      and txt = fun_id name lid in
+      pexp_apply ~loc (pexp_ident ~loc { loc; txt }) params
+    in
+    let rec exprs_of_typ funcs next =
+      match next with
+      | [%type: [%t? typ] option] | [%type: [%t? typ] Option.t] ->
+        exprs_of_typ (option_map :: funcs) typ
+      | [%type: [%t? typ] list] | [%type: [%t? typ] List.t] ->
+        exprs_of_typ (list_map :: funcs) typ
+      | [%type: ([%t? typ], [%t? _]) result] | [%type: ([%t? typ], [%t? _]) Result.t] ->
+        exprs_of_typ (result_map :: funcs) typ
+      | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, []); _ } ->
+        inner_expr name lid, funcs
+      | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, (arg :: _ as args)); _ } ->
+        if List.for_all ~f:(Fn.non is_constr) args
+        then inner_expr name lid, funcs
+        else (
+          let funcs' =
+            match mappable with
+            | Some jane -> map ~lid ~jane :: funcs
+            | None      -> funcs
+          in
+          exprs_of_typ funcs' arg )
+      | { ptyp_desc = Ptyp_poly (_, typ); _ } ->
+        Location.raise_errorf ~loc "Fail on poly: %s" (string_of_core_type typ)
+      | { ptyp_desc = Ptyp_var name; _ } ->
+        Location.raise_errorf ~loc "Fail on Ptyp_var: %s" name
+      | _ -> Location.raise_errorf ~loc "exprs_of_typ failure"
+    in
+    let expr, maps = exprs_of_typ [] ld.pld_type in
+    List.fold ~f:(fun expr m -> [%expr [%e m ~loc expr]]) ~init:expr maps
   in
-  id_of_typ [] ld.pld_type
+  Option.(
+    value_map
+      ~f
+      ~default:[%expr fun a -> a]
+      (transform_to_names is_unit transform >>= some_if (not ignored)))
 
-(* TODO:
-   Need to factor of the function generation using the fun_id code etc so that I can
-   use it for non-record types as well (e.g. bare maps / lists etc). *)
 let record_entry ~transform (ld : label_declaration) =
   let loc = ld.pld_loc in
-  let is_unit = Option.is_some @@ Attribute.get unit_attr ld
-  and ignored = Option.is_some @@ Attribute.get ignore_attr ld
-  and jane = Option.is_some @@ Attribute.get jane_attr ld
-  and field_id = { loc; txt = lident ld.pld_name.txt } in
+  let field_id = { loc; txt = lident ld.pld_name.txt } in
   let field_expr = pexp_field ~loc (pexp_ident ~loc { loc; txt = lident "t" }) field_id in
-  match Option.(transform_to_names is_unit transform >>= some_if (not ignored)) with
-  | Some (name, params) ->
-    let id, functors = ld_to_fun_id_and_functors ld name
-    and params =
-      List.fold
-        ~init:[]
-        ~f:(fun ps p -> (Nolabel, pexp_ident ~loc { loc; txt = lident p }) :: ps)
-        params
-    in
-    let expr =
-      let f expr = function
-        | Option -> [%expr [%e option_map ~loc expr]]
-        | List   -> [%expr [%e list_map ~loc expr]]
-        | Result -> [%expr [%e result_map ~loc expr]]
-        | Map    -> [%expr [%e map_map ~jane ~loc expr]]
-      and transform_expr = pexp_apply ~loc (pexp_ident ~loc { loc; txt = id }) params in
-      List.fold ~f ~init:transform_expr functors
-    in
-    field_id, [%expr [%e expr] [%e field_expr]]
-  | None                -> field_id, field_expr
+  let expr = transform_expr ~transform ld in
+  field_id, [%expr [%e expr] [%e field_expr]]
 
 let build_fun ~loc ~params expr =
   let f expr txt = pexp_fun ~loc Nolabel None (ppat_var ~loc { loc; txt }) expr in
