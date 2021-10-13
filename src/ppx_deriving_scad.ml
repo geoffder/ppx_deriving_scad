@@ -4,37 +4,7 @@ open! Ast_builder.Default
 
 (* TODO:
    - support for 2d and 3d types in gadt version of scad-ml?
-   - support for non-record types. Would be nice to have for naked Maps
-     (Columns.t being the first one from the bottom up in dometyl)
 *)
-
-let unit_attr =
-  Attribute.declare
-    "scad.unit"
-    Attribute.Context.label_declaration
-    Ast_pattern.(pstr nil)
-    ()
-
-let ignore_attr =
-  Attribute.declare
-    "scad.ignore"
-    Attribute.Context.label_declaration
-    Ast_pattern.(pstr nil)
-    ()
-
-let map_attr =
-  Attribute.declare
-    "scad.map"
-    Attribute.Context.label_declaration
-    Ast_pattern.(pstr nil)
-    ()
-
-let mapf_attr =
-  Attribute.declare
-    "scad.mapf"
-    Attribute.Context.label_declaration
-    Ast_pattern.(pstr nil)
-    ()
 
 type transform =
   | Translate
@@ -136,14 +106,16 @@ let map ~lid ~jane ~loc expr =
   let id = pexp_ident ~loc @@ { loc; txt = fun_id "map" lid } in
   if jane then [%expr [%e id] ~f:[%e expr]] else [%expr [%e id] [%e expr]]
 
-let transform_expr ~transform (ld : label_declaration) =
-  let loc = ld.pld_loc
-  and is_unit = Option.is_some @@ Attribute.get unit_attr ld
-  and ignored = Option.is_some @@ Attribute.get ignore_attr ld
+let get_attr target =
+  List.find ~f:(fun { attr_name = { txt; _ }; _ } -> String.equal target txt)
+
+let transform_expr ~transform ~loc ~kind (ct : core_type) =
+  let is_unit = Option.is_some @@ Attr.get_unit kind
+  and ignored = Option.is_some @@ Attr.get_ignore kind
   and mappable =
-    if Option.is_some @@ Attribute.get map_attr ld
+    if Option.is_some @@ Attr.get_map kind
     then Some false
-    else if Option.is_some @@ Attribute.get mapf_attr ld
+    else if Option.is_some @@ Attr.get_mapf kind
     then Some true
     else None
   and is_constr = function
@@ -186,7 +158,7 @@ let transform_expr ~transform (ld : label_declaration) =
         Location.raise_errorf ~loc "Fail on Ptyp_var: %s" name
       | _ -> Location.raise_errorf ~loc "exprs_of_typ failure"
     in
-    let expr, maps = exprs_of_typ [] ld.pld_type in
+    let expr, maps = exprs_of_typ [] ct in
     List.fold ~f:(fun expr m -> [%expr [%e m ~loc expr]]) ~init:expr maps
   in
   Option.(
@@ -195,51 +167,59 @@ let transform_expr ~transform (ld : label_declaration) =
       ~default:[%expr fun a -> a]
       (transform_to_names is_unit transform >>= some_if (not ignored)))
 
-let record_entry ~transform (ld : label_declaration) =
-  let loc = ld.pld_loc in
-  let field_id = { loc; txt = lident ld.pld_name.txt } in
-  let field_expr = pexp_field ~loc (pexp_ident ~loc { loc; txt = lident "t" }) field_id in
-  let expr = transform_expr ~transform ld in
-  field_id, [%expr [%e expr] [%e field_expr]]
-
 let build_fun ~loc ~params expr =
   let f expr txt = pexp_fun ~loc Nolabel None (ppat_var ~loc { loc; txt }) expr in
   List.fold ~init:expr ~f params
 
-let record_transformer ~loc ~transform (td : type_declaration) fields =
+let transformer ~loc ~transform (td : type_declaration) expr =
   let name =
     let func_name = transform_to_string transform in
-    if String.equal td.ptype_name.txt "t"
-    then func_name
-    else Printf.sprintf "%s_%s" func_name td.ptype_name.txt
-  and f = record_entry ~transform in
-  pstr_value
-    ~loc
-    Nonrecursive
-    [ { pvb_pat = ppat_var ~loc { loc; txt = name }
-      ; pvb_expr =
-          build_fun
-            ~loc
-            ~params:(transform_to_rev_params transform)
-            (pexp_fun
-               ~loc
-               Nolabel
-               None
-               (ppat_var ~loc { loc; txt = "t" })
-               (pexp_record ~loc (List.map ~f fields) None) )
-      ; pvb_attributes = []
-      ; pvb_loc = loc
+    ppat_var
+      ~loc
+      { loc
+      ; txt =
+          ( if String.equal td.ptype_name.txt "t"
+          then func_name
+          else Printf.sprintf "%s_%s" func_name td.ptype_name.txt )
       }
-    ]
+  and func =
+    let f expr txt = pexp_fun ~loc Nolabel None (ppat_var ~loc { loc; txt }) expr
+    and init = pexp_fun ~loc Nolabel None (ppat_var ~loc { loc; txt = "t" }) expr in
+    List.fold ~init ~f (transform_to_rev_params transform)
+  in
+  [%stri let [%p name] = [%e func]]
+
+let abstract_transformer ~loc ~transform (td : type_declaration) ct =
+  let expr = transform_expr ~loc ~transform ~kind:(`Type ct) ct in
+  transformer ~loc ~transform td [%expr [%e expr] t]
+
+let record_transformer ~loc ~transform (td : type_declaration) fields =
+  let entry (ld : label_declaration) =
+    let loc = ld.pld_loc in
+    let field_id = { loc; txt = lident ld.pld_name.txt } in
+    let field_expr =
+      pexp_field ~loc (pexp_ident ~loc { loc; txt = lident "t" }) field_id
+    in
+    let expr = transform_expr ~transform ~loc ~kind:(`Field ld) ld.pld_type in
+    field_id, [%expr [%e expr] [%e field_expr]]
+  in
+  let expr = pexp_record ~loc (List.map ~f:entry fields) None in
+  transformer ~loc ~transform td expr
 
 let transformer_impl ~ctxt (_rec_flag, type_declarations) =
   let loc = Expansion_context.Deriver.derived_item_loc ctxt in
   let f (td : type_declaration) =
     match td with
-    | { ptype_kind = Ptype_abstract | Ptype_variant _ | Ptype_open; _ } ->
+    | { ptype_kind = Ptype_variant _ | Ptype_open; _ } ->
       Location.raise_errorf
         ~loc
-        "Deriving scad transformers for non-record types is not supported."
+        "Deriving scad transformers for variant/open types is not supported."
+    | { ptype_kind = Ptype_abstract; ptype_manifest = None; _ } ->
+      Location.raise_errorf
+        ~loc
+        "Deriving scad transformers cannot be derived for empty abstract types."
+    | { ptype_kind = Ptype_abstract; ptype_manifest = Some ct; _ } ->
+      List.map ~f:(fun transform -> abstract_transformer ~loc ~transform td ct) transforms
     | { ptype_kind = Ptype_record fields; _ } ->
       List.map
         ~f:(fun transform -> record_transformer ~loc ~transform td fields)
@@ -255,11 +235,11 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
   let loc = Expansion_context.Deriver.derived_item_loc ctxt in
   let f (td : type_declaration) =
     match td with
-    | { ptype_kind = Ptype_abstract | Ptype_variant _ | Ptype_open; _ } ->
+    | { ptype_kind = Ptype_variant _ | Ptype_open; _ } ->
       Location.raise_errorf
         ~loc
-        "Deriving scad transformers for non-record types is not supported."
-    | { ptype_kind = Ptype_record _; ptype_name; ptype_params; _ } ->
+        "Deriving scad transformers for non-abstract/record types is not supported."
+    | { ptype_kind = Ptype_abstract | Ptype_record _; ptype_name; ptype_params; _ } ->
       let gen_sig transform =
         let name =
           let func_name = transform_to_string transform in

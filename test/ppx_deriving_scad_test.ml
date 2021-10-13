@@ -43,10 +43,14 @@ end = struct
   type t = { map : Vec3.t IntMap.t [@scad.map] } [@@deriving scad]
 end
 
-module VecJaneMap : sig
-  type t = { map : Vec3.t Map.M(Int).t [@scad.mapf] } [@@deriving scad]
+module BareJaneMap = struct
+  type t = (Vec3.t Map.M(Int).t[@scad.mapf]) [@@deriving scad]
+end
+
+module BareVecList : sig
+  type t = Vec3.t list [@@deriving scad]
 end = struct
-  type t = { map : Vec3.t Map.M(Int).t [@scad.mapf] } [@@deriving scad]
+  type t = Vec3.t list [@@deriving scad]
 end
 
 module VecRes = struct
@@ -94,3 +98,18 @@ let%test "translate_opt_opt" =
   and p = 1., 1., 1. in
   let trans = OptOpt.translate p a in
   Vec3.equal p Option.(value ~default:Vec3.zero @@ join trans.vec)
+
+let%test "translate_map_vec" =
+  let a = VecStdMap.{ map = IntMap.add 0 (0., 0., 0.) IntMap.empty }
+  and p = 1., 1., 1. in
+  let trans = VecStdMap.translate p a in
+  Vec3.equal p (IntMap.find 0 trans.map)
+
+let%test "translate_bare_jane_map" =
+  let p = 1., 1., 1. in
+  let a =
+    BareJaneMap.translate
+      p
+      (Map.add_exn (Map.empty (module Int)) ~key:0 ~data:(0., 0., 0.))
+  in
+  Vec3.equal p (Map.find_exn a 0)
