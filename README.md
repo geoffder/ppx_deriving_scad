@@ -75,6 +75,30 @@ end = struct
 end
 ```
 
+## Other mappable types
+By default, `[@@deriving scad]` will attempt to map over constructors other than
+the above basic types by using applying the `map` function of the relevant
+module, or for the non-`t` named type, using the same naming conventions as
+explained above.
+``` ocaml
+module IntMap = Map.Make (Int)
+type vec_map = Vec3.t IntMap.t [@@deriving scad]
+```
+Here, `IntMap.map` will be used to apply transformations to the contained
+`Vec3.t` elements. The expected map function should obey the convention of the
+function `f` being the first *positional* argument. If you are following the
+conventions of Jane Street and/or have `base`/`core` open, then you may use
+`[@@deriving scad_jane]` which defaults to expecting `map` functions to accept a
+keyword parameter `~f` instead. If you are deriving a record containing types
+with mixed mapping conventions, you can make use of the [`[@scad.map]` and
+`[@scad.mapf]`](#[@scad.map]-and-[@scad.mapf]) attributes to specify fields that
+do not match your default convention.
+
+If the constructor type is not named `t` as in this example, then this ppx will
+attempt to use a function with the suffix `_map`. For example, if the type above
+was instead `Vec3.t int_map`, the function `int_map_map` will be expected in the
+scope of the derived type.
+
 ## Intf generation
 Annotating types in module sigs and `.mli` files will generate the relevant type signatures.
 ``` ocaml
@@ -91,9 +115,11 @@ This annotation should be applied to abstract types and fields which represent
 unit vector. Types/fields marked with this will not be subject to
 transformations that would cause them to lose thier identity as such, or rotate
 about anything other than the world origin. Thus:
+
   - translate and scale will not be applied (identity function instead)
   - {rotate,quaternion}_about_pt will be replaced by their pivot translation
-  free counterparts
+    free counterparts
+
 **Usage:**
 ``` ocaml
 type plane =
@@ -118,6 +144,7 @@ This annotation marks a field (in a record, not applicable to abstract types) to
 be ignored by all generated transformations. This is useful for ignoring
 whatever flags/configuration data that you want to carry around along with your
 type for which the relevant functions have not been implemented.
+
 **Usage:**
 ``` ocaml
 type mark =
@@ -129,17 +156,27 @@ type mark =
 
 ### [@scad.map] and [@scad.mapf]
 This annotation marks a type/field for which the transformable type is contained
-within a mappable type (aka functor), for which `map` is defined. `[@scad.map]`
-indicates that the relevant `map` function obeys the convention of `f` being the
-first *positional* argument, whereas `[@scad.mapf]` indicates that a keyword
-argument of `~f` is expected instead (as is convention in Jane Street libraries,
-such as `base` and `core`). These attributes are not required for the `list`,
-`option`, and `result` types, which will automatically be mapped over.
+within a mappable type (aka functor), for which `map` is defined, and whose
+parameter convention differs from the default specified by the deriver attached
+to the type declaration.
+
+  - `[@@deriving scad]` -> positional `f` expected (e.g. `map f`)
+  - `[@@deriving scad_jane]` -> keyword `~f` expected (e.g. `map ~f`)
+
+Thus, `[@scad.map]`indicates that relevant `map` functions will obey the
+convention of `f` being the first *positional* argument (overiding `[@@deriving
+scad_jane]`), whereas `[@scad.mapf]` indicates that a keyword argument of `~f`
+is expected instead (overiding `[@@deriving scad]`). These attributes are not
+required for the `list`, `option`, and `result` types, as they do not rely on
+any functions in scope.
+
 **Usage:**
 ``` ocaml
 module IntMap = Map.Make (Int)
-type vec_map = (Vec3.t IntMap.t [@scad.map]) [@@deriving scad]
-```
-``` ocaml
-type vec_map = (Vec3.t Map.M(Int).t [@scad.mapf]) [@@deriving scad]
+module MixedMaps = struct
+  type t =
+    { std : Vec3.t IntMap.t
+    ; jane : (Vec3.t Map.M(Int).t [@scad.mapf])
+    } [@@deriving scad]
+end
 ```

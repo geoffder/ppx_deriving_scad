@@ -38,13 +38,13 @@ end
 module IntMap = Caml.Map.Make (Int)
 
 module VecStdMap : sig
-  type t = { map : Vec3.t IntMap.t [@scad.map] } [@@deriving scad]
+  type t = { map : Vec3.t IntMap.t } [@@deriving scad]
 end = struct
-  type t = { map : Vec3.t IntMap.t [@scad.map] } [@@deriving scad]
+  type t = { map : Vec3.t IntMap.t } [@@deriving scad]
 end
 
 module BareJaneMap = struct
-  type t = (Vec3.t Map.M(Int).t[@scad.mapf]) [@@deriving scad]
+  type t = Vec3.t Map.M(Int).t [@@deriving scad_jane]
 end
 
 module BareVecList : sig

@@ -93,15 +93,12 @@ let map ~lid ~jane ~loc expr =
 let get_attr target =
   List.find ~f:(fun { attr_name = { txt; _ }; _ } -> String.equal target txt)
 
-let transform_expr ~transform ~loc ~kind (ct : core_type) =
+let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
   let is_unit = Option.is_some @@ Attr.get_unit kind
   and ignored = Option.is_some @@ Attr.get_ignore kind
-  and mappable =
-    if Option.is_some @@ Attr.get_map kind
-    then Some false
-    else if Option.is_some @@ Attr.get_mapf kind
-    then Some true
-    else None
+  and jane =
+    (jane || (Option.is_some @@ Attr.get_mapf kind))
+    && (not @@ Option.is_some @@ Attr.get_map kind)
   and is_constr = function
     | { ptyp_desc = Ptyp_constr _; _ } -> true
     | _ -> false
@@ -129,13 +126,7 @@ let transform_expr ~transform ~loc ~kind (ct : core_type) =
       | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, (arg :: _ as args)); _ } ->
         if List.for_all ~f:(Fn.non is_constr) args
         then inner_expr name lid, funcs
-        else (
-          let funcs' =
-            match mappable with
-            | Some jane -> map ~lid ~jane :: funcs
-            | None      -> funcs
-          in
-          exprs_of_typ funcs' arg )
+        else exprs_of_typ (map ~lid ~jane :: funcs) arg
       | { ptyp_desc = Ptyp_poly (_, typ); _ } ->
         Location.raise_errorf ~loc "Fail on poly: %s" (string_of_core_type typ)
       | { ptyp_desc = Ptyp_var name; _ } ->
@@ -173,24 +164,24 @@ let transformer ~loc ~transform (td : type_declaration) expr =
   in
   [%stri let [%p name] = [%e func]]
 
-let abstract_transformer ~loc ~transform (td : type_declaration) ct =
-  let expr = transform_expr ~loc ~transform ~kind:(`Type ct) ct in
+let abstract_transformer ~loc ~jane ~transform (td : type_declaration) ct =
+  let expr = transform_expr ~loc ~jane ~transform ~kind:(`Type ct) ct in
   transformer ~loc ~transform td [%expr [%e expr] t]
 
-let record_transformer ~loc ~transform (td : type_declaration) fields =
+let record_transformer ~loc ~jane ~transform (td : type_declaration) fields =
   let entry (ld : label_declaration) =
     let loc = ld.pld_loc in
     let field_id = { loc; txt = lident ld.pld_name.txt } in
     let field_expr =
       pexp_field ~loc (pexp_ident ~loc { loc; txt = lident "t" }) field_id
     in
-    let expr = transform_expr ~transform ~loc ~kind:(`Field ld) ld.pld_type in
+    let expr = transform_expr ~loc ~jane ~transform ~kind:(`Field ld) ld.pld_type in
     field_id, [%expr [%e expr] [%e field_expr]]
   in
   let expr = pexp_record ~loc (List.map ~f:entry fields) None in
   transformer ~loc ~transform td expr
 
-let transformer_impl ~ctxt (_rec_flag, type_declarations) =
+let transformer_impl ~jane ~ctxt (_rec_flag, type_declarations) =
   let loc = Expansion_context.Deriver.derived_item_loc ctxt in
   let f (td : type_declaration) =
     match td with
@@ -203,10 +194,12 @@ let transformer_impl ~ctxt (_rec_flag, type_declarations) =
         ~loc
         "Deriving scad transformers cannot be derived for empty abstract types."
     | { ptype_kind = Ptype_abstract; ptype_manifest = Some ct; _ } ->
-      List.map ~f:(fun transform -> abstract_transformer ~loc ~transform td ct) transforms
+      List.map
+        ~f:(fun transform -> abstract_transformer ~loc ~jane ~transform td ct)
+        transforms
     | { ptype_kind = Ptype_record fields; _ } ->
       List.map
-        ~f:(fun transform -> record_transformer ~loc ~transform td fields)
+        ~f:(fun transform -> record_transformer ~loc ~jane ~transform td fields)
         transforms
   in
   List.concat_map ~f type_declarations
@@ -262,6 +255,17 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
   in
   List.concat_map ~f type_declarations
 
-let impl_generator = Deriving.Generator.V2.make_noarg transformer_impl
+let impl_generator ~jane = Deriving.Generator.V2.make_noarg (transformer_impl ~jane)
 let intf_generator = Deriving.Generator.V2.make_noarg transformer_intf
-let scad = Deriving.add ~str_type_decl:impl_generator ~sig_type_decl:intf_generator "scad"
+
+let scad =
+  Deriving.add
+    ~str_type_decl:(impl_generator ~jane:false)
+    ~sig_type_decl:intf_generator
+    "scad"
+
+let scad_jane =
+  Deriving.add
+    ~str_type_decl:(impl_generator ~jane:true)
+    ~sig_type_decl:intf_generator
+    "scad_jane"
