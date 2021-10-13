@@ -71,22 +71,6 @@ let list_map ~loc expr =
     in
     aux []]
 
-let is_map s = Str.string_match (Str.regexp "Map") s 0
-
-let rec is_lid_map = function
-  | Lident s      -> is_map s
-  | Ldot (p, _)   -> is_lid_map p
-  | Lapply (a, b) -> is_lid_map a || is_lid_map b
-
-let lid_contains lid name =
-  let str s = Str.string_match (Str.regexp name) s 0 in
-  let rec aux = function
-    | Lident s      -> str s
-    | Ldot (p, _)   -> aux p
-    | Lapply (a, b) -> aux a || aux b
-  in
-  aux lid
-
 let fun_id name lid =
   let maybe_suffix s =
     if String.equal s "t" then name else Printf.sprintf "%s_%s" name s
