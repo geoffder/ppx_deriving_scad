@@ -91,7 +91,7 @@ conventions of Jane Street and/or have `base`/`core` open, then you may use
 `[@@deriving scad_jane]` which defaults to expecting `map` functions to accept a
 keyword parameter `~f` instead. If you are deriving a record containing types
 with mixed mapping conventions, you can make use of the [`[@scad.map]` and
-`[@scad.mapf]`](#scadmap-and-scadmapf]) attributes to specify fields that
+`[@scad.mapf]`](#scadmap-and-scadmapf) attributes to specify fields that
 do not match your default convention.
 
 If the constructor type is not named `t` as in this example, then this ppx will
