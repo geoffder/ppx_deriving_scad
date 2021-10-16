@@ -2,10 +2,6 @@ open! Ppxlib
 open! Base
 open! Ast_builder.Default
 
-(* TODO:
-   - support for 2d and 3d types in gadt version of scad-ml?
-*)
-
 type transform =
   | Translate
   | Scale
@@ -121,17 +117,16 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
         exprs_of_typ (list_map :: funcs) typ
       | [%type: ([%t? typ], [%t? _]) result] | [%type: ([%t? typ], [%t? _]) Result.t] ->
         exprs_of_typ (result_map :: funcs) typ
+      | [%type: [%t? _] Scad.t] | [%type: Scad.d2] | [%type: Scad.d3] ->
+        let lid = Longident.(Ldot (Ldot (lident "Scad_ml", "Scad"), "t")) in
+        inner_expr name lid, funcs
       | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, []); _ } ->
         inner_expr name lid, funcs
       | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, (arg :: _ as args)); _ } ->
         if List.for_all ~f:(Fn.non is_constr) args
         then inner_expr name lid, funcs
         else exprs_of_typ (map ~lid ~jane :: funcs) arg
-      | { ptyp_desc = Ptyp_poly (_, typ); _ } ->
-        Location.raise_errorf ~loc "Fail on poly: %s" (string_of_core_type typ)
-      | { ptyp_desc = Ptyp_var name; _ } ->
-        Location.raise_errorf ~loc "Fail on Ptyp_var: %s" name
-      | _ -> Location.raise_errorf ~loc "exprs_of_typ failure"
+      | ct -> Location.raise_errorf ~loc "Unhandled type: %s" (string_of_core_type ct)
     in
     let expr, maps = exprs_of_typ [] ct in
     List.fold ~f:(fun expr m -> [%expr [%e m ~loc expr]]) ~init:expr maps
@@ -192,7 +187,7 @@ let transformer_impl ~jane ~ctxt (_rec_flag, type_declarations) =
     | { ptype_kind = Ptype_abstract; ptype_manifest = None; _ } ->
       Location.raise_errorf
         ~loc
-        "Deriving scad transformers cannot be derived for empty abstract types."
+        "Scad transformers cannot be derived for empty abstract types."
     | { ptype_kind = Ptype_abstract; ptype_manifest = Some ct; _ } ->
       List.map
         ~f:(fun transform -> abstract_transformer ~loc ~jane ~transform td ct)

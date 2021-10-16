@@ -10,7 +10,7 @@ library](https://github.com/geoffder/scad-ml).
 open Scad_ml
 
 type mark =
-  { scad : Scad.t
+  { scad : Scad.three_d Scad.t
   ; origin : Vec3.t
   }
   [@@deriving scad]
@@ -28,16 +28,18 @@ val mirror_mark : Vec3.t -> mark -> mark
 
 If the name of the type being derived is `t`, then the functions generated (and
 those required to be present for the types inside of a type/record being
-derived) will be given unqualified names. For example, applying `[@@deriving
-scad]` to a lone record type `t` would give a module that adhered to the
-following signature.
+derived) will be given unqualified names. Notable exceptions to this rule, are
+the 2D and 3D `Scad.t` aliases `Scad.d2` and `Scad.d3`, which use the same
+unquailified basic transformation functions in the `Scad` module. For example,
+applying `[@@deriving scad]` to a lone record type `t` would give a module that
+adhered to the following signature.
 
 ``` ocaml
 open Scad_ml
 
 module Mark : sig
   type t =
-    { scad : Scad.t
+    { scad : Scad.d3
     ; origin : Vec3.t
     }
 
@@ -50,7 +52,7 @@ module Mark : sig
   val mirror : Vec3.t -> t -> t
 end = struct
   type t =
-    { scad : Scad.t
+    { scad : Scad.three_d Scad.t
     ; origin : Vec3.t
     }
     [@@deriving scad]
@@ -103,9 +105,9 @@ scope of the derived type.
 Annotating types in module sigs and `.mli` files will generate the relevant type signatures.
 ``` ocaml
 module MaybeScad : sig
-  type t = Scad.t option [@@deriving scad]
+  type 's t = 's Scad.t option [@@deriving scad]
 end = struct
-  type t = Scad.t option [@@deriving scad]
+  type 's t = 's Scad.t option [@@deriving scad]
 end
 ```
 
@@ -123,7 +125,7 @@ about anything other than the world origin. Thus:
 **Usage:**
 ``` ocaml
 type plane =
-  { scad : Scad.t
+  { scad : Scad.three_d Scad.t
   ; normal : Vec3.t [@scad.unit]
   } [@@deriving scad]
 ```
@@ -148,7 +150,7 @@ type for which the relevant functions have not been implemented.
 **Usage:**
 ``` ocaml
 type mark =
-  { scad : Scad.t
+  { scad : Scad.three_d Scad.t
   ; origin : Vec3.t
   ; id : int [@scad.ignore]
   } [@@deriving scad]

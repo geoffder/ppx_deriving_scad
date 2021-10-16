@@ -14,14 +14,18 @@ type with_ignored =
 [@@deriving scad]
 
 module ScadVec : sig
-  type t =
-    { scad : Scad.t
+  type 's t =
+    { scad : 's Scad.t
+    ; scad_2d : Scad.d2
+    ; scad_3d : Scad.d3
     ; vec_pair : vec_pair
     }
   [@@deriving scad]
 end = struct
-  type t =
-    { scad : Scad.t
+  type 's t =
+    { scad : 's Scad.t
+    ; scad_2d : Scad.d2
+    ; scad_3d : Scad.d3
     ; vec_pair : vec_pair
     }
   [@@deriving scad]
