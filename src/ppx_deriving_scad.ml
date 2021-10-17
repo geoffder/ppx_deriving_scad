@@ -120,6 +120,31 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
       | [%type: [%t? _] Scad.t] | [%type: Scad.d2] | [%type: Scad.d3] ->
         let lid = Longident.(Ldot (Ldot (lident "Scad_ml", "Scad"), "t")) in
         inner_expr name lid, funcs
+      | { ptyp_desc = Ptyp_tuple cts; _ } ->
+        (* TODO: combine these mappings so that I don't iterate over twice *)
+        let sub_exprs =
+          List.map
+            ~f:(fun c ->
+              let expr, maps = exprs_of_typ [] c in
+              List.fold ~f:(fun expr m -> [%expr [%e m ~loc expr]]) ~init:expr maps )
+            cts
+        in
+        let tup_expr =
+          let argn n = Printf.sprintf "arg%i" n in
+          [%expr
+            fun [%p
+                  Ast_helper.Pat.tuple
+                    ~loc
+                    (List.mapi
+                       ~f:(fun i _ -> Ast_helper.Pat.var ~loc { loc; txt = argn i })
+                       cts )] ->
+              [%e
+                pexp_tuple ~loc
+                @@ List.mapi
+                     ~f:(fun i expr -> [%expr [%e expr] [%e evar ~loc (argn i)]])
+                     sub_exprs]]
+        in
+        tup_expr, funcs
       | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, []); _ } ->
         inner_expr name lid, funcs
       | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, (arg :: _ as args)); _ } ->

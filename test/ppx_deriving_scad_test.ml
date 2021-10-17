@@ -71,6 +71,10 @@ module PolyType = struct
   type 'a t = { p : 'a p } [@@deriving scad]
 end
 
+module VecTupleOpt = struct
+  type t = (Vec3.t option * Vec3.t option) option [@@deriving scad]
+end
+
 let%test "rotate_about_pair" =
   let a = { reg = 5., 5., 0.; unit = 0., 1., 0. }
   and r = 0., 0., Float.pi /. 2.
@@ -117,3 +121,9 @@ let%test "translate_bare_jane_map" =
       (Map.add_exn (Map.empty (module Int)) ~key:0 ~data:(0., 0., 0.))
   in
   Vec3.equal p (Map.find_exn a 0)
+
+let%test "translate_opt_tuple" =
+  let p = 1., 1., 1. in
+  match VecTupleOpt.translate p @@ Some (Some Vec3.zero, None) with
+  | Some (Some (1., 1., 1.), None) -> true
+  | _ -> false
