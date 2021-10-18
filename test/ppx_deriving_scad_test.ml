@@ -71,7 +71,9 @@ module PolyType = struct
   type 'a t = { p : 'a p } [@@deriving scad]
 end
 
-module VecTupleOpt = struct
+module VecTupleOpt : sig
+  type t = (Vec3.t option * Vec3.t option) option [@@deriving scad]
+end = struct
   type t = (Vec3.t option * Vec3.t option) option [@@deriving scad]
 end
 
