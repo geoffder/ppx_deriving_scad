@@ -174,6 +174,7 @@ any functions in scope.
 
 **Usage:**
 ``` ocaml
+open Base
 module IntMap = Map.Make (Int)
 module MixedMaps = struct
   type t =
