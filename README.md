@@ -59,9 +59,9 @@ end = struct
 end
 ```
 
-## Basic functor/monadic types
-The `list`, `option`, and `result` types are automatically mapped over, without
-any additional annotation or functions provided.
+## Basic functor/monadic types and tuples
+The `list`, `option`, and `result` types, as well as **tuples**, are automatically
+mapped over, without any additional annotation or functions provided.
 ``` ocaml
 module Points : sig
   type t = Vec3.t list
