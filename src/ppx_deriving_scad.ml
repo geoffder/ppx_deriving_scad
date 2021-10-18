@@ -117,7 +117,12 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
         exprs_of_typ (list_map :: funcs) typ
       | [%type: ([%t? typ], [%t? _]) result] | [%type: ([%t? typ], [%t? _]) Result.t] ->
         exprs_of_typ (result_map :: funcs) typ
-      | [%type: [%t? _] Scad.t] | [%type: Scad.d2] | [%type: Scad.d3] ->
+      | [%type: [%t? _] Scad.t]
+      | [%type: Scad.d2]
+      | [%type: Scad.d3]
+      | [%type: [%t? _] Scad_ml.Scad.t]
+      | [%type: Scad_ml.Scad.d2]
+      | [%type: Scad_ml.Scad.d3] ->
         let lid = Longident.(Ldot (Ldot (lident "Scad_ml", "Scad"), "t")) in
         inner_expr name lid, funcs
       | { ptyp_desc = Ptyp_tuple cts; _ } ->
