@@ -1,8 +1,8 @@
 # [@@deriving scad]
 `ppx_deriving_scad` is a PPX syntax extension that generates functions for the
-3d transformation of user defined abstract types and records containing types
-for which said transformation functions are defined, in particular, the `Scad.t`
-and `Vec3.t` types of the [Scad_ml
+spatial transformation of user defined abstract types and records containing
+types for which said transformation functions are defined, in particular, the
+`Scad.t` and `Vec3.t` types of the [Scad_ml
 library](https://github.com/geoffder/scad-ml).
 
 **For example:**
@@ -59,7 +59,7 @@ end = struct
 end
 ```
 
-## Basic functor/monadic types and tuples
+## Basic monadic types and tuples
 The `list`, `option`, and `result` types, as well as **tuples**, are automatically
 mapped over, without any additional annotation or functions provided.
 ``` ocaml
@@ -176,7 +176,7 @@ any functions in scope.
 ``` ocaml
 open Base
 
-module IntMap = Map.Make (Int)
+module IntMap = Caml.Map.Make (Int)
 
 module MixedMaps = struct
   type t =
