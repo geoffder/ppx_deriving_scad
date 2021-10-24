@@ -1,9 +1,8 @@
 # [@@deriving scad]
-`ppx_deriving_scad` is a PPX syntax extension that generates functions for the
-spatial transformation of user defined abstract types and records containing
-types for which said transformation functions are defined, in particular, the
-`Scad.t` and `Vec3.t` types of the [Scad_ml
-library](https://github.com/geoffder/scad-ml).
+`ppx_deriving_scad` is a PPX deriver that generates functions for the spatial
+transformation of user defined abstract and record types containing types for
+which said transformation functions are defined, in particular, the `Scad.t` and
+`Vec3.t` types of the [Scad_ml library](https://github.com/geoffder/scad-ml).
 
 **For example:**
 ```ocaml
