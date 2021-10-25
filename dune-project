@@ -29,6 +29,4 @@
     :with-test))
   (ppxlib
    (>= 0.22.2))
-  (dune
-   (> 2.0))
   (ppx_inline_test :with-test)))
