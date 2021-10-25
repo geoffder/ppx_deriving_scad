@@ -86,9 +86,6 @@ let map ~lid ~jane ~loc expr =
   let id = pexp_ident ~loc @@ { loc; txt = fun_id "map" lid } in
   if jane then [%expr [%e id] ~f:[%e expr]] else [%expr [%e id] [%e expr]]
 
-let get_attr target =
-  List.find ~f:(fun { attr_name = { txt; _ }; _ } -> String.equal target txt)
-
 let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
   let is_unit = Option.is_some @@ Attr.get_unit kind
   and ignored = Option.is_some @@ Attr.get_ignore kind
@@ -158,10 +155,6 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
       ~f
       ~default:[%expr fun a -> a]
       (transform_to_names is_unit transform >>= some_if (not ignored)))
-
-let build_fun ~loc ~params expr =
-  let f expr txt = pexp_fun ~loc Nolabel None (ppat_var ~loc { loc; txt }) expr in
-  List.fold ~init:expr ~f params
 
 let transformer ~loc ~transform (td : type_declaration) expr =
   let name =
