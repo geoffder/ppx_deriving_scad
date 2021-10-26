@@ -2,4 +2,5 @@
  (name ppx_deriving_scad_test)
  (inline_tests)
  (libraries base scad_ml)
- (preprocess (pps ppx_inline_test ppx_deriving_scad)))
+ (preprocess
+  (pps ppx_inline_test ppx_deriving_scad)))
