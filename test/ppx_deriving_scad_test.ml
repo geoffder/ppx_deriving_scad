@@ -31,11 +31,15 @@ end = struct
   [@@deriving scad]
 end
 
-module Pts = struct
+module Pts : sig
+  type t = { pts : Vec3.t list } [@@deriving scad]
+end = struct
   type t = { pts : Vec3.t list } [@@deriving scad]
 end
 
-module OptOpt = struct
+module OptOpt : sig
+  type t = { vec : Vec3.t option option } [@@deriving scad]
+end = struct
   type t = { vec : Vec3.t option option } [@@deriving scad]
 end
 
@@ -47,7 +51,9 @@ end = struct
   type t = { map : Vec3.t IntMap.t } [@@deriving scad]
 end
 
-module BareJaneMap = struct
+module BareJaneMap : sig
+  type t = Vec3.t Map.M(Int).t [@@deriving scad_jane]
+end = struct
   type t = Vec3.t Map.M(Int).t [@@deriving scad_jane]
 end
 
@@ -57,11 +63,21 @@ end = struct
   type t = Vec3.t list [@@deriving scad]
 end
 
-module VecRes = struct
+module VecRes : sig
+  type t = { res : (Vec3.t, string) Result.t } [@@deriving scad]
+end = struct
   type t = { res : (Vec3.t, string) Result.t } [@@deriving scad]
 end
 
-module PolyType = struct
+module PolyType : sig
+  type 'a p =
+    { a : 'a [@scad.ignore]
+    ; v : Vec3.t
+    }
+  [@@deriving scad]
+
+  type 'a t = { p : 'a p } [@@deriving scad]
+end = struct
   type 'a p =
     { a : 'a [@scad.ignore]
     ; v : Vec3.t
