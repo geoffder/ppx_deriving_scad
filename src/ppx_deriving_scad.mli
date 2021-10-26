@@ -1,4 +1,4 @@
-(** {1 [@@deriving scad]}
+(** {1 \[\@\@deriving scad\]}
 
     A PPX deriver that generates functions for the spatial transformation of
     user defined abstract and record types containing types for which said
@@ -139,7 +139,7 @@
 
     {1 Attributes}
 
-    {2 [@scad.unit]}
+    {2 \[\@scad.unit\]}
 
     This annotation should be applied to abstract types and fields which
     represent unit vector. Types/fields marked with this will not be subject to
@@ -168,7 +168,7 @@
         Vec3.equal plane.normal trans.normal
     ]}
 
-    {2 [@scad.ignore]}
+    {2 \[\@scad.ignore\]}
 
     This annotation marks a field (in a record, not applicable to abstract
     types) to be ignored by all generated transformations. This is useful for
@@ -185,7 +185,7 @@
       [@@deriving scad]
     ]}
 
-    {2 [@scad.map] and [@scad.mapf]}
+    {2 \[\@scad.map\] and \[\@scad.mapf\]}
 
     This annotation marks a type/field for which the transformable type is
     contained within a mappable type (aka functor), for which [map] is defined,
