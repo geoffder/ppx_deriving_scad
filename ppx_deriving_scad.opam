@@ -10,6 +10,7 @@ maintainer: ["Geoff deRosenroll<geoffderosenroll@gmail.com>"]
 authors: ["Geoff deRosenroll<geoffderosenroll@gmail.com>"]
 license: "AGPL-3.0-or-later"
 homepage: "https://github.com/geoffder/ppx_deriving_scad"
+doc: "https://geoffder.github.io/ppx_deriving_scad/docs"
 bug-reports: "https://github.com/geoffder/ppx_deriving_scad/issues"
 depends: [
   "dune" {>= "2.8"}
