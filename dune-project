@@ -7,6 +7,8 @@
 (source
  (github geoffder/ppx_deriving_scad))
 
+(documentation https://geoffder.github.io/ppx_deriving_scad/docs)
+
 (license AGPL-3.0-or-later)
 
 (authors "Geoff deRosenroll<geoffderosenroll@gmail.com>")
