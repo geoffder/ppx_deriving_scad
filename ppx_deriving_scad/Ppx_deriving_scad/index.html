@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Ppx_deriving_scad (ppx_deriving_scad.Ppx_deriving_scad)</title><link rel="stylesheet" href="../../odoc.css"/><meta charset="utf-8"/><meta name="generator" content="odoc 1.5.3"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><script src="../../highlight.pack.js"></script><script>hljs.initHighlightingOnLoad();</script></head><body><div class="content"><header><nav><a href="../index.html">Up</a> – <a href="../index.html">ppx_deriving_scad</a> &#x00BB; Ppx_deriving_scad</nav><h1>Module <code>Ppx_deriving_scad</code></h1><h2 id="[@@deriving-scad]"><a href="#[@@deriving-scad]" class="anchor"></a>[@@deriving scad]</h2><p>A PPX deriver that generates functions for the spatial transformation of user defined abstract and record types containing types for which said transformation functions are defined, in particular, the <span class="xref-unresolved" title="unresolved reference to &quot;Scad_ml.Scad.t&quot;"><span class="xref-unresolved" title="unresolved reference to &quot;Scad_ml.Scad&quot;"><code>Scad_ml</code>.Scad</span>.t</span> and <span class="xref-unresolved" title="unresolved reference to &quot;Scad_ml.Vec3.t&quot;"><span class="xref-unresolved" title="unresolved reference to &quot;Scad_ml.Vec3&quot;"><code>Scad_ml</code>.Vec3</span>.t</span> types of the <a href="https://github.com/namachan10777/scad-ml">Scad_ml library</a>.</p><p><b>For example:</b></p><pre><code class="ml">open Scad_ml
+
+type mark =
+  { scad: Scad.three_d Scad.t
+  ; origin: Vec3.t
+  }
+[@@deriving scad]</code></pre><p><b>Generates:</b></p><pre><code class="ml">val translate_mark : Vec3.t -&gt; mark -&gt; mark
+val scale_mark : Vec3.t -&gt; mark -&gt; mark
+val rotate_mark : Vec3.t -&gt; mark -&gt; mark
+val rotate_about_pt_mark : Vec3.t -&gt; Vec3.t -&gt; mark -&gt; mark
+val quaternion_mark : Quaternion.t -&gt; mark -&gt; mark
+val quaternion_about_pt_mark : Quaternion.t -&gt; Vec3.t -&gt; mark -&gt; mark
+val mirror_mark : Vec3.t -&gt; mark -&gt; mark</code></pre><p>If the name of the type being derived is <code>t</code>, then the functions generated (and those required to be present for the types inside of a type/record being derived) will be given unqualified names. Notable exceptions to this rule, are the 2D and 3D <span class="xref-unresolved" title="unresolved reference to &quot;Scad_ml.Scad.t&quot;"><span class="xref-unresolved" title="unresolved reference to &quot;Scad_ml.Scad&quot;"><code>Scad_ml</code>.Scad</span>.t</span> aliases <span class="xref-unresolved" title="unresolved reference to &quot;Scad_ml.Scad.d2&quot;"><span class="xref-unresolved" title="unresolved reference to &quot;Scad_ml.Scad&quot;"><code>Scad_ml</code>.Scad</span>.d2</span> and <span class="xref-unresolved" title="unresolved reference to &quot;Scad_ml.Scad.d3&quot;"><span class="xref-unresolved" title="unresolved reference to &quot;Scad_ml.Scad&quot;"><code>Scad_ml</code>.Scad</span>.d3</span>, which use the same unquailified basic transformation functions in the <span class="xref-unresolved" title="unresolved reference to &quot;Scad_ml.Scad&quot;"><code>Scad_ml</code>.Scad</span> module. For example, applying <code>[@@deriving scad]</code> to a lone record type <code>t</code> would give a module that adhered to the following signature.</p><pre><code class="ml">open Scad_ml
+
+module Mark : sig
+  type t =
+    { scad: Scad.d3
+    ; origin: Vec3.t
+    }
+
+  val translate : Vec3.t -&gt; t -&gt; t
+  val scale : Vec3.t -&gt; t -&gt; t
+  val rotate : Vec3.t -&gt; t -&gt; t
+  val rotate_about_pt : Vec3.t -&gt; Vec3.t -&gt; t -&gt; t
+  val quaternion : Quaternion.t -&gt; t -&gt; t
+  val quaternion_about_pt : Quaternion.t -&gt; Vec3.t -&gt; t -&gt; t
+  val mirror : Vec3.t -&gt; t -&gt; t
+end = struct
+  type t =
+    { scad: Scad.three_d Scad.t
+    ; origin: Vec3.t
+    }
+  [@@deriving scad]
+end</code></pre><h2 id="basic-monadic-types-and-tuples"><a href="#basic-monadic-types-and-tuples" class="anchor"></a>Basic monadic types and tuples</h2><p>The <code>list</code>, <code>option</code>, and <code>result</code> types, as well as <b>tuples</b>, are automatically mapped over, without any additional annotation or functions provided.</p><pre><code class="ml">module Points : sig
+  type t = Vec3.t list
+
+  val translate : Vec3.t -&gt; Vec3.t list -&gt; Vec3.t list
+  val scale : Vec3.t -&gt; Vec3.t list -&gt; Vec3.t list
+  val rotate : Vec3.t -&gt; Vec3.t list -&gt; Vec3.t list
+  val rotate_about_pt : Vec3.t -&gt; Vec3.t -&gt; Vec3.t list -&gt; Vec3.t list
+  val quaternion : Quaternion.t -&gt; Vec3.t list -&gt; Vec3.t list
+  val quaternion_about_pt : Quaternion.t -&gt; Vec3.t -&gt; Vec3.t list -&gt; Vec3.t list
+  val mirror : Vec3.t -&gt; Vec3.t list -&gt; Vec3.t list
+end = struct
+  type t = Vec3.t list [@@deriving scad]
+end</code></pre><h2 id="other-mappable-types"><a href="#other-mappable-types" class="anchor"></a>Other mappable types</h2><p>By default, <code>[@@deriving scad]</code> will attempt to map over constructors other than the above basic types by using applying the <code>map</code> function of the relevant module, or for the non-<code>t</code> named type, using the same naming conventions as explained above.</p><pre><code class="ml">module IntMap = Map.Make (Int)
+
+type vec_map = Vec3.t IntMap.t [@@deriving scad]</code></pre><p>Here, <code>IntMap.map</code> will be used to apply transformations to the contained <span class="xref-unresolved" title="unresolved reference to &quot;Scad_ml.Vec3.t&quot;"><span class="xref-unresolved" title="unresolved reference to &quot;Scad_ml.Vec3&quot;"><code>Scad_ml</code>.Vec3</span>.t</span> elements. The expected map function should obey the convention of the function <code>f</code> being the first <i>positional</i> argument. If you are following the conventions of JaneStreet and/or have <code>base</code>/<code>core</code> open, then you may use <code>[@@deriving scad_jane]</code> which defaults to expecting <code>map</code> functions to accept a keyword parameter <code>~f</code> instead. If you are deriving a record containing types with mixed mapping conventions, you can make use of the <code>[@scad.map]</code> and <code>[@scad.mapf]</code> attributes to specify fields that do not match your default convention.</p><p>If the constructor type is not named <code>t</code> as in this example, then this ppx will attempt to use a function with the suffix <code>_map</code>. For example, if the type above was instead <code>Vec3.t int_map</code>, the function <code>int_map_map</code> will be expected in the scope of the derived type.</p><h2 id="intf-generation"><a href="#intf-generation" class="anchor"></a>Intf generation</h2><p>Annotating types in module sigs and <code>.mli</code> files will generate the relevant type signatures.</p><pre><code class="ml">module MaybeScad : sig
+  type 's t = 's Scad.t option [@@deriving scad]
+end = struct
+  type 's t = 's Scad.t option [@@deriving scad]
+end</code></pre><h2 id="attributes"><a href="#attributes" class="anchor"></a>Attributes</h2><h3 id="[@scad.unit]"><a href="#[@scad.unit]" class="anchor"></a>[@scad.unit]</h3><p>This annotation should be applied to abstract types and fields which represent unit vector. Types/fields marked with this will not be subject to transformations that would cause them to lose thier identity as such, or rotate about anything other than the world origin. Thus:</p><ul><li>translate and scale will not be applied (identity function instead)</li><li>{<code>rotate</code>,<code>quaternion</code>}<code>_about_pt</code> will be replaced by their pivot translation free counterparts</li></ul><p><b>For example:</b></p><pre><code class="ml">type plane =
+  { scad: Scad.three_d Scad.t
+  ; normal: Vec3.t [@scad.unit]
+  }
+[@@deriving scad]</code></pre><p><b>In this case the following would hold:</b></p><pre><code class="ml">let true =
+  let plane = { scad= Scad.cube (10., 10., 0.001); normal= (0., 0., 1.) } in
+  let trans = plane_translate (5., 5., 0.) plane in
+  Vec3.equal plane.normal trans.normal</code></pre><h3 id="[@scad.ignore]"><a href="#[@scad.ignore]" class="anchor"></a>[@scad.ignore]</h3><p>This annotation marks a field (in a record, not applicable to abstract types) to be ignored by all generated transformations. This is useful for ignoring whatever flags/configuration data that you want to carry around along with your type for which the relevant functions have not been implemented.</p><pre><code class="ml">type mark =
+  { scad: Scad.three_d Scad.t
+  ; origin: Vec3.t
+  ; id: int [@scad.ignore]
+  }
+[@@deriving scad]</code></pre><h3 id="[@scad.map]-and-[@scad.mapf]"><a href="#[@scad.map]-and-[@scad.mapf]" class="anchor"></a>[@scad.map] and [@scad.mapf]</h3><p>This annotation marks a type/field for which the transformable type is contained within a mappable type (aka functor), for which <code>map</code> is defined, and whose parameter convention differs from the default specified by the deriver attached to the type declaration.</p><ul><li><code>[@@deriving scad]</code> -&gt; positional <code>f</code> expected (e.g. <code>map f</code>)</li><li><code>[@@deriving scad_jane]</code> -&gt; keyword <code>~f</code> expected (e.g. <code>map ~f</code>)</li></ul><p>Thus, <code>[@scad.map]</code>indicates that relevant <code>map</code> functions will obey the convention of <code>f</code> being the first <i>positional</i> argument (overiding <code>[@@deriving scad_jane]</code>), whereas <code>[@scad.mapf]</code> indicates that a keyword argument of <code>~f</code> is expected instead (overiding <code>[@@deriving scad]</code>). These attributes are not required for the <code>list</code>, <code>option</code>, and <code>result</code> types, as they do not rely on any functions in scope.</p><pre><code class="ml">open Base
+module IntMap = Caml.Map.Make (Int)
+
+module MixedMaps = struct
+  type t =
+    { std: Vec3.t IntMap.t
+    ; jane: (Vec3.t Map.M(Int).t[@scad.mapf])
+    }
+  [@@deriving scad]
+end</code></pre></header><dl><dt class="spec value" id="val-scad"><a href="#val-scad" class="anchor"></a><code><span class="keyword">val</span> scad : Ppxlib.Deriving.t</code></dt><dd><p>[@@deriving scad]</p><p>Derives <code>translate</code>, <code>scale</code>, <code>rotate</code>, <code>rotate_about_pt</code>, <code>quaternion</code>, <code>quaternion_about_pt</code>, and <code>mirror</code> for the tagged abstract or record type.</p></dd></dl><dl><dt class="spec value" id="val-scad_jane"><a href="#val-scad_jane" class="anchor"></a><code><span class="keyword">val</span> scad_jane : Ppxlib.Deriving.t</code></dt><dd><p><code>[@@deriving scad_jane]</code></p><p>Same as <code>[@@deriving scad]</code>, but defaults to expecting keyword <code>~f</code> parameters for mappable types other than <code>list</code>, <code>option</code>, <code>result</code>, and <b>tuples</b>. This can be overridden with the <code>[@scad.map]</code> attribute.</p></dd></dl></div></body></html>
