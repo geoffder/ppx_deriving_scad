@@ -96,7 +96,7 @@ let rec is_jane_map = function
 
 let map ~lid ~jane ~loc expr =
   let lid = if jane && is_jane_map lid then Longident.Ldot (lident "Map", "t") else lid in
-  let id = pexp_ident ~loc @@ { loc; txt= fun_id "map" lid } in
+  let id = pexp_ident ~loc @@ { loc; txt = fun_id "map" lid } in
   if jane then [%expr [%e id] ~f:[%e expr]] else [%expr [%e id] [%e expr]]
 
 let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
@@ -105,13 +105,13 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
   and jane =
     (jane || (Option.is_some @@ Attr.get_mapf kind))
     && (not @@ Option.is_some @@ Attr.get_map kind)
-  and is_constr = function { ptyp_desc= Ptyp_constr _; _ } -> true | _ -> false in
+  and is_constr = function { ptyp_desc = Ptyp_constr _; _ } -> true | _ -> false in
   let f (name, params) =
     let inner_expr name lid =
       let params =
         List.fold
           ~init:[]
-          ~f:(fun ps p -> (Nolabel, pexp_ident ~loc { loc; txt= lident p }) :: ps)
+          ~f:(fun ps p -> (Nolabel, pexp_ident ~loc { loc; txt = lident p }) :: ps)
           params
       and txt = fun_id name lid in
       pexp_apply ~loc (pexp_ident ~loc { loc; txt }) params
@@ -132,11 +132,11 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
       | [%type: Scad_ml.Scad.d3] ->
         let lid = Longident.(Ldot (Ldot (lident "Scad_ml", "Scad"), "t")) in
         (inner_expr name lid, funcs)
-      | { ptyp_desc= Ptyp_tuple cts; _ } ->
+      | { ptyp_desc = Ptyp_tuple cts; _ } ->
         let tup_expr =
           let argn n = Printf.sprintf "arg%i" n in
           let args =
-            let arg_var i _ = ppat_var ~loc { loc; txt= argn i } in
+            let arg_var i _ = ppat_var ~loc { loc; txt = argn i } in
             ppat_tuple ~loc (List.mapi ~f:arg_var cts)
           and sub_exprs =
             let f i c =
@@ -149,9 +149,9 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
           [%expr fun [%p args] -> [%e pexp_tuple ~loc sub_exprs]]
         in
         (tup_expr, funcs)
-      | { ptyp_desc= Ptyp_constr ({ txt= lid; _ }, []); _ } ->
+      | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, []); _ } ->
         (inner_expr name lid, funcs)
-      | { ptyp_desc= Ptyp_constr ({ txt= lid; _ }, (arg :: _ as args)); _ } ->
+      | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, (arg :: _ as args)); _ } ->
         if List.for_all ~f:(Fn.non is_constr) args then (inner_expr name lid, funcs)
         else exprs_of_typ (map ~lid ~jane :: funcs) arg
       | ct ->
@@ -172,13 +172,13 @@ let transformer ~loc ~transform (td : type_declaration) expr =
     ppat_var
       ~loc
       { loc
-      ; txt=
+      ; txt =
           ( if String.equal td.ptype_name.txt "t" then func_name
           else Printf.sprintf "%s_%s" func_name td.ptype_name.txt )
       }
   and func =
     let f expr txt = pexp_fun ~loc Nolabel None (ppat_var ~loc { loc; txt }) expr
-    and init = pexp_fun ~loc Nolabel None (ppat_var ~loc { loc; txt= "t" }) expr in
+    and init = pexp_fun ~loc Nolabel None (ppat_var ~loc { loc; txt = "t" }) expr in
     List.fold ~init ~f (transform_to_rev_params transform)
   in
   [%stri let [%p name] = [%e func]]
@@ -190,9 +190,9 @@ let abstract_transformer ~loc ~jane ~transform (td : type_declaration) ct =
 let record_transformer ~loc ~jane ~transform (td : type_declaration) fields =
   let entry (ld : label_declaration) =
     let loc = ld.pld_loc in
-    let field_id = { loc; txt= lident ld.pld_name.txt } in
+    let field_id = { loc; txt = lident ld.pld_name.txt } in
     let field_expr =
-      pexp_field ~loc (pexp_ident ~loc { loc; txt= lident "t" }) field_id
+      pexp_field ~loc (pexp_ident ~loc { loc; txt = lident "t" }) field_id
     in
     let expr = transform_expr ~loc ~jane ~transform ~kind:(`Field ld) ld.pld_type in
     (field_id, [%expr [%e expr] [%e field_expr]])
@@ -204,19 +204,19 @@ let transformer_impl ~jane ~ctxt (_rec_flag, type_declarations) =
   let loc = Expansion_context.Deriver.derived_item_loc ctxt in
   let f (td : type_declaration) =
     match td with
-    | { ptype_kind= Ptype_variant _ | Ptype_open; _ } ->
+    | { ptype_kind = Ptype_variant _ | Ptype_open; _ } ->
       Location.raise_errorf
         ~loc
         "Deriving scad transformers for variant/open types is not supported."
-    | { ptype_kind= Ptype_abstract; ptype_manifest= None; _ } ->
+    | { ptype_kind = Ptype_abstract; ptype_manifest = None; _ } ->
       Location.raise_errorf
         ~loc
         "Scad transformers cannot be derived for empty abstract types."
-    | { ptype_kind= Ptype_abstract; ptype_manifest= Some ct; _ } ->
+    | { ptype_kind = Ptype_abstract; ptype_manifest = Some ct; _ } ->
       List.map
         ~f:(fun transform -> abstract_transformer ~loc ~jane ~transform td ct)
         transforms
-    | { ptype_kind= Ptype_record fields; _ } ->
+    | { ptype_kind = Ptype_record fields; _ } ->
       List.map
         ~f:(fun transform -> record_transformer ~loc ~jane ~transform td fields)
         transforms
@@ -231,11 +231,11 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
   let loc = Expansion_context.Deriver.derived_item_loc ctxt in
   let f (td : type_declaration) =
     match td with
-    | { ptype_kind= Ptype_variant _ | Ptype_open; _ } ->
+    | { ptype_kind = Ptype_variant _ | Ptype_open; _ } ->
       Location.raise_errorf
         ~loc
         "Deriving scad transformers for non-abstract/record types is not supported."
-    | { ptype_kind= Ptype_abstract | Ptype_record _; ptype_name; ptype_params; _ } ->
+    | { ptype_kind = Ptype_abstract | Ptype_record _; ptype_name; ptype_params; _ } ->
       let gen_sig transform =
         let name =
           let func_name = transform_to_string transform in
@@ -245,7 +245,7 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
           let typ =
             ptyp_constr
               ~loc
-              { loc; txt= lident ptype_name.txt }
+              { loc; txt = lident ptype_name.txt }
               (List.map ~f:fst ptype_params)
           in
           ptyp_arrow ~loc Nolabel typ typ
@@ -264,11 +264,11 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
         in
         psig_value
           ~loc
-          { pval_name= { loc; txt= name }
+          { pval_name = { loc; txt = name }
           ; pval_type
-          ; pval_attributes= []
-          ; pval_loc= loc
-          ; pval_prim= []
+          ; pval_attributes = []
+          ; pval_loc = loc
+          ; pval_prim = []
           }
       in
       List.map ~f:gen_sig transforms

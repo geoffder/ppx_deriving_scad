@@ -11,8 +11,8 @@
       open Scad_ml
 
       type mark =
-        { scad: Scad.three_d Scad.t
-        ; origin: Vec3.t
+        { scad : Scad.three_d Scad.t
+        ; origin : Vec3.t
         }
       [@@deriving scad]
     ]}
@@ -42,8 +42,8 @@
 
       module Mark : sig
         type t =
-          { scad: Scad.d3
-          ; origin: Vec3.t
+          { scad : Scad.d3
+          ; origin : Vec3.t
           }
 
         val translate : Vec3.t -> t -> t
@@ -55,8 +55,8 @@
         val mirror : Vec3.t -> t -> t
       end = struct
         type t =
-          { scad: Scad.three_d Scad.t
-          ; origin: Vec3.t
+          { scad : Scad.three_d Scad.t
+          ; origin : Vec3.t
           }
         [@@deriving scad]
       end
@@ -140,8 +140,8 @@
 
     {[
       type plane =
-        { scad: Scad.three_d Scad.t
-        ; normal: Vec3.t [@scad.unit]
+        { scad : Scad.three_d Scad.t
+        ; normal : Vec3.t [@scad.unit]
         }
       [@@deriving scad]
     ]}
@@ -150,7 +150,7 @@
 
     {[
       let true =
-        let plane = { scad= Scad.cube (10., 10., 0.001); normal= (0., 0., 1.) } in
+        let plane = { scad = Scad.cube (10., 10., 0.001); normal = (0., 0., 1.) } in
         let trans = plane_translate (5., 5., 0.) plane in
         Vec3.equal plane.normal trans.normal
     ]}
@@ -164,9 +164,9 @@
 
     {[
       type mark =
-        { scad: Scad.three_d Scad.t
-        ; origin: Vec3.t
-        ; id: int [@scad.ignore]
+        { scad : Scad.three_d Scad.t
+        ; origin : Vec3.t
+        ; id : int [@scad.ignore]
         }
       [@@deriving scad]
     ]}
@@ -193,8 +193,8 @@
 
       module MixedMaps = struct
         type t =
-          { std: Vec3.t IntMap.t
-          ; jane: (Vec3.t Map.M(Int).t[@scad.mapf])
+          { std : Vec3.t IntMap.t
+          ; jane : (Vec3.t Map.M(Int).t[@scad.mapf])
           }
         [@@deriving scad]
       end
