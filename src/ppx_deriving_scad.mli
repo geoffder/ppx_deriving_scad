@@ -200,15 +200,15 @@
       end
     ]} *)
 
-val scad : Ppxlib.Deriving.t
 (** \[\@\@deriving scad\]
 
     Derives [translate], [scale], [rotate], [rotate_about_pt], [quaternion],
     [quaternion_about_pt], and [mirror] for the tagged abstract or record type. *)
+val scad : Ppxlib.Deriving.t
 
-val scad_jane : Ppxlib.Deriving.t
 (** [\[@@deriving scad_jane\]]
 
     Same as [\[@@deriving scad\]], but defaults to expecting keyword [~f] parameters for
     mappable types other than [list], [option], [result], and {b tuples}. This can be
     overridden with the [\[@scad.map\]] attribute. *)
+val scad_jane : Ppxlib.Deriving.t

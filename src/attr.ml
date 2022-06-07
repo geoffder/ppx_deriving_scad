@@ -2,41 +2,43 @@ open Ppxlib
 
 module Field = struct
   let unit =
-    Attribute.declare "scad.unit" Attribute.Context.label_declaration
+    Attribute.declare
+      "scad.unit"
+      Attribute.Context.label_declaration
       Ast_pattern.(pstr nil)
       ()
 
   let ignore =
-    Attribute.declare "scad.ignore" Attribute.Context.label_declaration
+    Attribute.declare
+      "scad.ignore"
+      Attribute.Context.label_declaration
       Ast_pattern.(pstr nil)
       ()
 
   let map =
-    Attribute.declare "scad.map" Attribute.Context.label_declaration
+    Attribute.declare
+      "scad.map"
+      Attribute.Context.label_declaration
       Ast_pattern.(pstr nil)
       ()
 
   let mapf =
-    Attribute.declare "scad.mapf" Attribute.Context.label_declaration
+    Attribute.declare
+      "scad.mapf"
+      Attribute.Context.label_declaration
       Ast_pattern.(pstr nil)
       ()
 end
 
 module Type = struct
   let unit =
-    Attribute.declare "scad.unit" Attribute.Context.core_type
-      Ast_pattern.(pstr nil)
-      ()
+    Attribute.declare "scad.unit" Attribute.Context.core_type Ast_pattern.(pstr nil) ()
 
   let map =
-    Attribute.declare "scad.map" Attribute.Context.core_type
-      Ast_pattern.(pstr nil)
-      ()
+    Attribute.declare "scad.map" Attribute.Context.core_type Ast_pattern.(pstr nil) ()
 
   let mapf =
-    Attribute.declare "scad.mapf" Attribute.Context.core_type
-      Ast_pattern.(pstr nil)
-      ()
+    Attribute.declare "scad.mapf" Attribute.Context.core_type Ast_pattern.(pstr nil) ()
 end
 
 let get_unit = function

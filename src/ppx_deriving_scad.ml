@@ -2,76 +2,98 @@ open! Ppxlib
 open! Base
 open! Ast_builder.Default
 
+(** TODO: rethink architecture to adapt to new 2d/3d restrictions
+   At the moment:
+    - all transforms are 3d
+    - type parameters of Scad are not considered
+    - Vec3.t is the transform input type for all transforms and rotations
+    - 2d and 3d mixing in product types is allowed
+   Goals:
+    - must only apply 3d transforms to 3d types (Quaternion/MultMatrix)
+    - 2d and 3d vectors/shapes cannot be mixed in the same type (the
+      transformation types according to the type params of the scad GADT must be
+      respected)
+   Plan:
+    - rather than recursively building the expressions being the first time
+     that the full depth of the types is covered, they need to be checked first
+     to check what dimensional (2d/3d) system they belong to, and check that
+     they are the same
+      - NOTE: how much of should be left up failing typechecking, or
+        the outer parameter types not matching those required by the target
+        module functions?
+      - Due to the inapplicability of Quaternion/Multmatrix to 2d space, I think
+        I do need to cover the depth first so I can select the correct
+        transformation list
+    - once dimensional system is known, select the correct types for the
+      generated signatures (v3/v3 or v2/float). Since I need to know the
+      dimension for signatures as well as implementations, the space type check
+      should be a separate function *)
+
 type transform =
   | Translate
   | Scale
   | Rotate
   | RotateAbout
+  | MultMatrix
   | Quaternion
   | QuaternionAbout
   | Mirror
 
 let transforms =
-  [ Translate; Scale; Rotate; RotateAbout; Quaternion; QuaternionAbout; Mirror ]
+  [ Translate; Scale; Rotate; RotateAbout; Mirror; Quaternion; QuaternionAbout ]
+
+let transforms_2d = [ Translate; Scale; Rotate; RotateAbout; Mirror ]
+let transforms_3d = MultMatrix :: Quaternion :: QuaternionAbout :: transforms_2d
 
 let transform_to_string = function
-  | Translate       ->
-    "translate"
-  | Scale           ->
-    "scale"
-  | Rotate          ->
-    "rotate"
-  | RotateAbout     ->
-    "rotate_about_pt"
-  | Quaternion      ->
-    "quaternion"
-  | QuaternionAbout ->
-    "quaternion_about_pt"
-  | Mirror          ->
-    "mirror"
+  | Translate -> "translate"
+  | Scale -> "scale"
+  | Rotate -> "rotate"
+  | RotateAbout -> "rotate_about_pt"
+  | Quaternion -> "quaternion"
+  | QuaternionAbout -> "quaternion_about_pt"
+  | Mirror -> "mirror"
 
 let transform_to_rev_params = function
-  | Translate       ->
-    [ "p" ]
-  | Scale           ->
-    [ "s" ]
-  | Rotate          ->
-    [ "r" ]
-  | RotateAbout     ->
-    [ "p"; "r" ]
-  | Quaternion      ->
-    [ "q" ]
-  | QuaternionAbout ->
-    [ "p"; "q" ]
-  | Mirror          ->
-    [ "ax" ]
+  | Translate -> [ "p" ]
+  | Scale -> [ "s" ]
+  | Rotate -> [ "r" ]
+  | RotateAbout -> [ "p"; "r" ]
+  | Quaternion -> [ "q" ]
+  | QuaternionAbout -> [ "p"; "q" ]
+  | Mirror -> [ "ax" ]
 
 let transform_drop_about = function
-  | RotateAbout     ->
-    Rotate
-  | QuaternionAbout ->
-    Quaternion
-  | trans           ->
-    trans
+  | RotateAbout -> Rotate
+  | QuaternionAbout -> Quaternion
+  | trans -> trans
 
 let transform_to_names is_unit transform =
-  match (is_unit, transform) with
-  | true, (Translate | Scale) ->
-    None
-  | false, trans              ->
-    Some (transform_to_string trans, transform_to_rev_params trans)
-  | true, trans               ->
+  match is_unit, transform with
+  | true, (Translate | Scale) -> None
+  | false, trans -> Some (transform_to_string trans, transform_to_rev_params trans)
+  | true, trans ->
     let trans' = transform_drop_about trans in
     Some (transform_to_string trans', transform_to_rev_params trans')
 
 let option_map ~loc expr =
-  [%expr function Some opt -> Some ([%e expr] opt) | None -> None]
+  [%expr
+    function
+    | Some opt -> Some ([%e expr] opt)
+    | None -> None]
 
-let result_map ~loc expr = [%expr function Ok ok -> Ok ([%e expr] ok) | err -> err]
+let result_map ~loc expr =
+  [%expr
+    function
+    | Ok ok -> Ok ([%e expr] ok)
+    | err -> err]
 
 let list_map ~loc expr =
   [%expr
-    let rec aux acc = function h :: t -> aux ([%e expr] h :: acc) t | [] -> acc in
+    let rec aux acc = function
+      | h :: t -> aux ([%e expr] h :: acc) t
+      | [] -> acc
+    in
     aux []]
 
 let fun_id name lid =
@@ -79,20 +101,14 @@ let fun_id name lid =
     if String.equal s "t" then name else Printf.sprintf "%s_%s" name s
   in
   match lid with
-  | Lident s    ->
-    Lident (maybe_suffix s)
-  | Ldot (p, s) ->
-    Ldot (p, maybe_suffix s)
-  | Lapply _    ->
-    assert false
+  | Lident s -> Lident (maybe_suffix s)
+  | Ldot (p, s) -> Ldot (p, maybe_suffix s)
+  | Lapply _ -> assert false
 
 let rec is_jane_map = function
-  | Lident s      ->
-    String.equal "Map" s
-  | Ldot (p, _)   ->
-    is_jane_map p
-  | Lapply (a, b) ->
-    is_jane_map a || is_jane_map b
+  | Lident s -> String.equal "Map" s
+  | Ldot (p, _) -> is_jane_map p
+  | Lapply (a, b) -> is_jane_map a || is_jane_map b
 
 let map ~lid ~jane ~loc expr =
   let lid = if jane && is_jane_map lid then Longident.Ldot (lident "Map", "t") else lid in
@@ -105,7 +121,10 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
   and jane =
     (jane || (Option.is_some @@ Attr.get_mapf kind))
     && (not @@ Option.is_some @@ Attr.get_map kind)
-  and is_constr = function { ptyp_desc = Ptyp_constr _; _ } -> true | _ -> false in
+  and is_constr = function
+    | { ptyp_desc = Ptyp_constr _; _ } -> true
+    | _ -> false
+  in
   let f (name, params) =
     let inner_expr name lid =
       let params =
@@ -131,7 +150,7 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
       | [%type: Scad_ml.Scad.d2]
       | [%type: Scad_ml.Scad.d3] ->
         let lid = Longident.(Ldot (Ldot (lident "Scad_ml", "Scad"), "t")) in
-        (inner_expr name lid, funcs)
+        inner_expr name lid, funcs
       | { ptyp_desc = Ptyp_tuple cts; _ } ->
         let tup_expr =
           let argn n = Printf.sprintf "arg%i" n in
@@ -148,14 +167,14 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
           in
           [%expr fun [%p args] -> [%e pexp_tuple ~loc sub_exprs]]
         in
-        (tup_expr, funcs)
+        tup_expr, funcs
       | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, []); _ } ->
-        (inner_expr name lid, funcs)
+        inner_expr name lid, funcs
       | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, (arg :: _ as args)); _ } ->
-        if List.for_all ~f:(Fn.non is_constr) args then (inner_expr name lid, funcs)
+        if List.for_all ~f:(Fn.non is_constr) args
+        then inner_expr name lid, funcs
         else exprs_of_typ (map ~lid ~jane :: funcs) arg
-      | ct ->
-        Location.raise_errorf ~loc "Unhandled type: %s" (string_of_core_type ct)
+      | ct -> Location.raise_errorf ~loc "Unhandled type: %s" (string_of_core_type ct)
     in
     let expr, maps = exprs_of_typ [] ct in
     List.fold ~f:(fun expr m -> [%expr [%e m ~loc expr]]) ~init:expr maps
@@ -173,7 +192,8 @@ let transformer ~loc ~transform (td : type_declaration) expr =
       ~loc
       { loc
       ; txt =
-          ( if String.equal td.ptype_name.txt "t" then func_name
+          ( if String.equal td.ptype_name.txt "t"
+          then func_name
           else Printf.sprintf "%s_%s" func_name td.ptype_name.txt )
       }
   and func =
@@ -195,7 +215,7 @@ let record_transformer ~loc ~jane ~transform (td : type_declaration) fields =
       pexp_field ~loc (pexp_ident ~loc { loc; txt = lident "t" }) field_id
     in
     let expr = transform_expr ~loc ~jane ~transform ~kind:(`Field ld) ld.pld_type in
-    (field_id, [%expr [%e expr] [%e field_expr]])
+    field_id, [%expr [%e expr] [%e field_expr]]
   in
   let expr = pexp_record ~loc (List.map ~f:entry fields) None in
   transformer ~loc ~transform td expr
@@ -239,7 +259,8 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
       let gen_sig transform =
         let name =
           let func_name = transform_to_string transform in
-          if String.equal td.ptype_name.txt "t" then func_name
+          if String.equal td.ptype_name.txt "t"
+          then func_name
           else Printf.sprintf "%s_%s" func_name td.ptype_name.txt
         and last_arrow =
           let typ =
@@ -252,15 +273,13 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
         in
         let pval_type =
           match transform with
-          | RotateAbout     ->
+          | RotateAbout ->
             let arrow = scad_type_arrow ~loc "Vec3" in
             arrow @@ arrow last_arrow
-          | Quaternion      ->
-            scad_type_arrow ~loc "Quaternion" @@ last_arrow
+          | Quaternion -> scad_type_arrow ~loc "Quaternion" @@ last_arrow
           | QuaternionAbout ->
             scad_type_arrow ~loc "Quaternion" @@ scad_type_arrow ~loc "Vec3" @@ last_arrow
-          | _               ->
-            scad_type_arrow ~loc "Vec3" @@ last_arrow
+          | _ -> scad_type_arrow ~loc "Vec3" @@ last_arrow
         in
         psig_value
           ~loc
