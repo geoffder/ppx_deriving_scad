@@ -136,7 +136,7 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
           params
       and txt = fun_id name lid in
       pexp_apply ~loc (pexp_ident ~loc { loc; txt }) params
-    in
+    and fix_id m = Longident.(Ldot (Ldot (lident "Scad_ml", m), "t")) in
     let rec exprs_of_typ funcs next =
       match next with
       | [%type: [%t? typ] option] | [%type: [%t? typ] Option.t] ->
@@ -145,14 +145,16 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
         exprs_of_typ (list_map :: funcs) typ
       | [%type: ([%t? typ], [%t? _]) result] | [%type: ([%t? typ], [%t? _]) Result.t] ->
         exprs_of_typ (result_map :: funcs) typ
-      | [%type: [%t? _] Scad.t]
+      | [%type: ([%t? _], [%t? _]) Scad.t]
       | [%type: Scad.d2]
       | [%type: Scad.d3]
-      | [%type: [%t? _] Scad_ml.Scad.t]
+      | [%type: ([%t? _], [%t? _]) Scad_ml.Scad.t]
       | [%type: Scad_ml.Scad.d2]
-      | [%type: Scad_ml.Scad.d3] ->
-        let lid = Longident.(Ldot (Ldot (lident "Scad_ml", "Scad"), "t")) in
-        inner_expr name lid, funcs
+      | [%type: Scad_ml.Scad.d3] -> inner_expr name (fix_id "Scad"), funcs
+      | [%type: Scad.v2] | [%type: Scad_ml.Scad.v2] ->
+        inner_expr name (fix_id "Vec2"), funcs
+      | [%type: Scad.v3] | [%type: Scad_ml.Scad.v3] ->
+        inner_expr name (fix_id "Vec3"), funcs
       | { ptyp_desc = Ptyp_tuple cts; _ } ->
         let tup_expr =
           let argn n = Printf.sprintf "arg%i" n in
