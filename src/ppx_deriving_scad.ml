@@ -31,72 +31,6 @@ open! Ast_builder.Default
 
 (* NOTE: if a dim check comes back dimensionless, a ppx error will be raised if
     the user has not provided an attribute that disambiguates it *)
-type dimension =
-  | Dimensionless
-  | D2
-  | D3
-  | Poly of string * string
-
-let equal_dimensions a b =
-  match a, b with
-  | D2, D2 -> true
-  | D3, D3 -> true
-  | Poly (s1, r1), Poly (s2, r2) -> String.equal s1 s2 && String.equal r1 r2
-  | Dimensionless, _ | _, Dimensionless -> true
-  | _ -> false
-
-type dim_error =
-  | MixedDimensions
-  | PolyCollapse
-  | PolyMismatch
-
-let is_constr = function
-  | { ptyp_desc = Ptyp_constr _; _ } -> true
-  | _ -> false
-
-let dim_check ~loc ct =
-  let rec aux dim = function
-    | [%type: [%t? typ] option]
-    | [%type: [%t? typ] Option.t]
-    | [%type: [%t? typ] list]
-    | [%type: [%t? typ] List.t]
-    | [%type: ([%t? typ], [%t? _]) result]
-    | [%type: ([%t? typ], [%t? _]) Result.t] -> aux dim typ
-    | [%type: (Vec2.t, float) Scad.t]
-    | [%type: (Vec2.t, float) Scad_ml.Scad.t]
-    | [%type: Scad.d2]
-    | [%type: Scad_ml.Scad.d2] ->
-      ( match dim with
-      | D3 -> Error MixedDimensions
-      | Poly _ -> Error PolyCollapse
-      | _ -> Ok D2 )
-    | [%type: (Vec3.t, Vec3.t) Scad.t]
-    | [%type: (Vec3.t, Vec3.t) Scad_ml.Scad.t]
-    | [%type: Scad.d3]
-    | [%type: Scad_ml.Scad.d3] ->
-      ( match dim with
-      | D2 -> Error MixedDimensions
-      | Poly _ -> Error PolyCollapse
-      | _ -> Ok D3 )
-    | [%type:
-        ([%t? { ptyp_desc = Ptyp_var s; _ }], [%t? { ptyp_desc = Ptyp_var r; _ }]) Scad.t]
-    | [%type:
-        ( [%t? { ptyp_desc = Ptyp_var s; _ }]
-        , [%t? { ptyp_desc = Ptyp_var r; _ }] )
-        Scad_ml.Scad.t] ->
-      ( match dim with
-      | D2 | D3 -> Error PolyCollapse
-      | Poly (s', r') when String.equal s s' && String.equal r r' -> Ok (Poly (s, r))
-      | Dimensionless -> Ok (Poly (s, r))
-      | _ -> Error PolyMismatch )
-    | { ptyp_desc = Ptyp_tuple (hd :: cts); _ } ->
-      Result.bind ~f:(fun init -> List.fold_result ~init ~f:aux cts) (aux dim hd)
-    | { ptyp_desc = Ptyp_constr (_, []); _ } -> Ok dim
-    | { ptyp_desc = Ptyp_constr (_, (arg :: _ as args)); _ } ->
-      if List.for_all ~f:(Fn.non is_constr) args then Ok dim else aux dim arg
-    | ct -> Location.raise_errorf ~loc "Unhandled type: %s" (string_of_core_type ct)
-  in
-  aux Dimensionless ct
 
 type transform =
   | Translate
@@ -239,7 +173,7 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
       | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, []); _ } ->
         inner_expr name lid, funcs
       | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, (arg :: _ as args)); _ } ->
-        if List.for_all ~f:(Fn.non is_constr) args
+        if List.for_all ~f:(Fn.non Util.is_constr) args
         then inner_expr name lid, funcs
         else exprs_of_typ (map ~lid ~jane :: funcs) arg
       | ct -> Location.raise_errorf ~loc "Unhandled type: %s" (string_of_core_type ct)
@@ -315,6 +249,11 @@ let scad_type_arrow ~loc name =
   let txt = Longident.Ldot (Longident.Ldot (lident "Scad_ml", name), "t") in
   ptyp_arrow ~loc Nolabel (ptyp_constr ~loc { loc; txt } [])
 
+let float_type_arrow ~loc =
+  ptyp_arrow ~loc Nolabel (ptyp_constr ~loc { loc; txt = lident "float" } [])
+
+let var_type_arrow ~loc v = ptyp_arrow ~loc Nolabel (ptyp_var ~loc v)
+
 let transformer_intf ~ctxt (_rec_flag, type_declarations) =
   let loc = Expansion_context.Deriver.derived_item_loc ctxt in
   let f (td : type_declaration) =
@@ -323,7 +262,14 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
       Location.raise_errorf
         ~loc
         "Deriving scad transformers for non-abstract/record types is not supported."
-    | { ptype_kind = Ptype_abstract | Ptype_record _; ptype_name; ptype_params; _ } ->
+    | { ptype_manifest = None; _ } ->
+      Location.raise_errorf ~loc "Scad transformers cannot be derived for empty types."
+    | { ptype_kind = Ptype_abstract | Ptype_record _
+      ; ptype_name
+      ; ptype_params
+      ; ptype_manifest = Some ct
+      ; _
+      } ->
       (* TODO: dimension type checking returning an result of (D2 / D3 /
                   Poly of (param1, param2) sumtype)
           - if Ok, proceed, if Error, raise the ppx error.
@@ -332,6 +278,16 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
             (not the non-dimensional parameters to the input type, if it has
             any). The correct params will be given by the Poly variant mentioned
             above. *)
+      let dim = Dim.check ~loc ct in
+      let space_arrow, rot_arrow =
+        match dim with
+        | D2 -> scad_type_arrow ~loc "Vec2", float_type_arrow ~loc
+        | D3 ->
+          let v3_arrow = scad_type_arrow ~loc "Vec3" in
+          v3_arrow, v3_arrow
+        | Poly (space, rot) -> var_type_arrow ~loc space, var_type_arrow ~loc rot
+        | _ -> failwith "unreachable: Dimensionless fails Dim.check"
+      in
       let gen_sig transform =
         let name =
           let func_name = transform_to_string transform in
@@ -349,13 +305,13 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
         in
         let pval_type =
           match transform with
-          | RotateAbout ->
-            let arrow = scad_type_arrow ~loc "Vec3" in
-            arrow @@ arrow last_arrow
+          | Rotate -> rot_arrow last_arrow
+          | RotateAbout -> rot_arrow @@ space_arrow last_arrow
+          | MultMatrix -> scad_type_arrow ~loc "MultMatrix" @@ last_arrow
           | Quaternion -> scad_type_arrow ~loc "Quaternion" @@ last_arrow
           | QuaternionAbout ->
             scad_type_arrow ~loc "Quaternion" @@ scad_type_arrow ~loc "Vec3" @@ last_arrow
-          | _ -> scad_type_arrow ~loc "Vec3" @@ last_arrow
+          | _ -> space_arrow last_arrow
         in
         psig_value
           ~loc

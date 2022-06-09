@@ -39,6 +39,12 @@ module Type = struct
 
   let mapf =
     Attribute.declare "scad.mapf" Attribute.Context.core_type Ast_pattern.(pstr nil) ()
+
+  let d2 =
+    Attribute.declare "scad.d2" Attribute.Context.core_type Ast_pattern.(pstr nil) ()
+
+  let d3 =
+    Attribute.declare "scad.d3" Attribute.Context.core_type Ast_pattern.(pstr nil) ()
 end
 
 let get_unit = function
