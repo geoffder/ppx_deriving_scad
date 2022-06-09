@@ -3,7 +3,6 @@ open! Base
 open! Ast_builder.Default
 
 type t =
-  | Dimensionless
   | D2
   | D3
   | Poly of string * string
@@ -16,13 +15,12 @@ type error =
 
 type result = (t, error) Result.t
 
-let equal a b =
-  match a, b with
-  | D2, D2 -> true
-  | D3, D3 -> true
-  | Poly (s1, r1), Poly (s2, r2) -> String.equal s1 s2 && String.equal r1 r2
-  | Dimensionless, _ | _, Dimensionless -> true
-  | _ -> false
+(* let equal a b = *)
+(*   match a, b with *)
+(*   | D2, D2 -> true *)
+(*   | D3, D3 -> true *)
+(*   | Poly (s1, r1), Poly (s2, r2) -> String.equal s1 s2 && String.equal r1 r2 *)
+(*   | _ -> false *)
 
 let unwrap_result ~loc res =
   let r = Location.raise_errorf ~loc in
@@ -56,17 +54,17 @@ let check ~loc ct =
     | [%type: Scad.d2]
     | [%type: Scad_ml.Scad.d2] ->
       ( match dim with
-      | D3 -> Error MixedDimensions
-      | Poly _ -> Error PolyCollapse
-      | _ -> Ok D2 )
+      | Some D3 -> Error MixedDimensions
+      | Some (Poly _) -> Error PolyCollapse
+      | _ -> Ok (Some D2) )
     | [%type: (Vec3.t, Vec3.t) Scad.t]
     | [%type: (Vec3.t, Vec3.t) Scad_ml.Scad.t]
     | [%type: Scad.d3]
     | [%type: Scad_ml.Scad.d3] ->
       ( match dim with
-      | D2 -> Error MixedDimensions
-      | Poly _ -> Error PolyCollapse
-      | _ -> Ok D3 )
+      | Some D2 -> Error MixedDimensions
+      | Some (Poly _) -> Error PolyCollapse
+      | _ -> Ok (Some D3) )
     | [%type:
         ([%t? { ptyp_desc = Ptyp_var s; _ }], [%t? { ptyp_desc = Ptyp_var r; _ }]) Scad.t]
     | [%type:
@@ -74,9 +72,9 @@ let check ~loc ct =
         , [%t? { ptyp_desc = Ptyp_var r; _ }] )
         Scad_ml.Scad.t] ->
       ( match dim with
-      | D2 | D3 -> Error PolyCollapse
-      | Poly (s', r') when String.equal s s' && String.equal r r' -> Ok (Poly (s, r))
-      | Dimensionless -> Ok (Poly (s, r))
+      | Some (D2 | D3) -> Error PolyCollapse
+      | Some (Poly (s', r')) as d when String.equal s s' && String.equal r r' -> Ok d
+      | None -> Ok (Some (Poly (s, r)))
       | _ -> Error PolyMismatch )
     | { ptyp_desc = Ptyp_tuple (hd :: cts); _ } ->
       Result.bind ~f:(fun init -> List.fold_result ~init ~f:aux cts) (aux dim hd)
@@ -85,7 +83,7 @@ let check ~loc ct =
       if List.for_all ~f:(Fn.non Util.is_constr) args then Ok dim else aux dim arg
     | ct -> Location.raise_errorf ~loc "Unhandled type: %s" (string_of_core_type ct)
   in
-  Result.bind (aux Dimensionless ct) ~f:(function
-      | Dimensionless -> dim_attr ct
-      | d -> Ok d )
+  Result.bind (aux None ct) ~f:(function
+      | None -> dim_attr ct
+      | Some d -> Ok d )
   |> unwrap_result ~loc

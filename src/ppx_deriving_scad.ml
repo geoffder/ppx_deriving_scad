@@ -34,18 +34,18 @@ open! Ast_builder.Default
 
 type transform =
   | Translate
-  | Scale
   | Rotate
   | RotateAbout
   | MultMatrix
   | Quaternion
   | QuaternionAbout
+  | Scale
   | Mirror
 
 let transforms =
   [ Translate; Scale; Rotate; RotateAbout; Mirror; Quaternion; QuaternionAbout ]
 
-let transforms_2d = [ Translate; Scale; Rotate; RotateAbout; Mirror ]
+let transforms_2d = [ Translate; Rotate; RotateAbout; Scale; Mirror ]
 let transforms_3d = MultMatrix :: Quaternion :: QuaternionAbout :: transforms_2d
 
 let transform_to_string = function
@@ -256,73 +256,64 @@ let var_type_arrow ~loc v = ptyp_arrow ~loc Nolabel (ptyp_var ~loc v)
 
 let transformer_intf ~ctxt (_rec_flag, type_declarations) =
   let loc = Expansion_context.Deriver.derived_item_loc ctxt in
-  let f (td : type_declaration) =
-    match td with
-    | { ptype_kind = Ptype_variant _ | Ptype_open; _ } ->
-      Location.raise_errorf
-        ~loc
-        "Deriving scad transformers for non-abstract/record types is not supported."
-    | { ptype_manifest = None; _ } ->
-      Location.raise_errorf ~loc "Scad transformers cannot be derived for empty types."
-    | { ptype_kind = Ptype_abstract | Ptype_record _
-      ; ptype_name
-      ; ptype_params
-      ; ptype_manifest = Some ct
-      ; _
-      } ->
-      (* TODO: dimension type checking returning an result of (D2 / D3 /
-                  Poly of (param1, param2) sumtype)
-          - if Ok, proceed, if Error, raise the ppx error.
-          - params for polymorphic type were already taken care of before, but
-            the functions generated on it will have to use the correct parameters
-            (not the non-dimensional parameters to the input type, if it has
-            any). The correct params will be given by the Poly variant mentioned
-            above. *)
-      let dim = Dim.check ~loc ct in
-      let space_arrow, rot_arrow =
-        match dim with
-        | D2 -> scad_type_arrow ~loc "Vec2", float_type_arrow ~loc
-        | D3 ->
-          let v3_arrow = scad_type_arrow ~loc "Vec3" in
-          v3_arrow, v3_arrow
-        | Poly (space, rot) -> var_type_arrow ~loc space, var_type_arrow ~loc rot
-        | _ -> failwith "unreachable: Dimensionless fails Dim.check"
-      in
-      let gen_sig transform =
-        let name =
-          let func_name = transform_to_string transform in
-          if String.equal td.ptype_name.txt "t"
-          then func_name
-          else Printf.sprintf "%s_%s" func_name td.ptype_name.txt
-        and last_arrow =
-          let typ =
-            ptyp_constr
-              ~loc
-              { loc; txt = lident ptype_name.txt }
-              (List.map ~f:fst ptype_params)
-          in
-          ptyp_arrow ~loc Nolabel typ typ
-        in
-        let pval_type =
-          match transform with
-          | Rotate -> rot_arrow last_arrow
-          | RotateAbout -> rot_arrow @@ space_arrow last_arrow
-          | MultMatrix -> scad_type_arrow ~loc "MultMatrix" @@ last_arrow
-          | Quaternion -> scad_type_arrow ~loc "Quaternion" @@ last_arrow
-          | QuaternionAbout ->
-            scad_type_arrow ~loc "Quaternion" @@ scad_type_arrow ~loc "Vec3" @@ last_arrow
-          | _ -> space_arrow last_arrow
-        in
-        psig_value
+  let f ({ ptype_kind; ptype_name; ptype_params; ptype_manifest; _ } as td) =
+    let dim =
+      match ptype_kind, ptype_manifest with
+      | (Ptype_variant _ | Ptype_open), _ ->
+        Location.raise_errorf
           ~loc
-          { pval_name = { loc; txt = name }
-          ; pval_type
-          ; pval_attributes = []
-          ; pval_loc = loc
-          ; pval_prim = []
-          }
+          "Deriving scad transformers for non-abstract/record types is not supported."
+      | Ptype_abstract, Some ct -> Dim.check ~loc ct
+      | Ptype_abstract, None ->
+        Location.raise_errorf
+          ~loc
+          "Scad transformers cannot be derived for empty abstract types."
+      | Ptype_record _, _ -> failwith "implement record dim checking"
+    in
+    let space_arrow, rot_arrow, transforms =
+      match dim with
+      | D2 -> scad_type_arrow ~loc "Vec2", float_type_arrow ~loc, transforms_2d
+      | D3 ->
+        let v3_arrow = scad_type_arrow ~loc "Vec3" in
+        v3_arrow, v3_arrow, transforms_3d
+      | Poly (space, rot) ->
+        var_type_arrow ~loc space, var_type_arrow ~loc rot, transforms_2d
+    in
+    let gen_sig transform =
+      let name =
+        let func_name = transform_to_string transform in
+        if String.equal td.ptype_name.txt "t"
+        then func_name
+        else Printf.sprintf "%s_%s" func_name td.ptype_name.txt
+      and last_arrow =
+        let typ =
+          ptyp_constr
+            ~loc
+            { loc; txt = lident ptype_name.txt }
+            (List.map ~f:fst ptype_params)
+        in
+        ptyp_arrow ~loc Nolabel typ typ
       in
-      List.map ~f:gen_sig transforms
+      let pval_type =
+        match transform with
+        | Rotate -> rot_arrow last_arrow
+        | RotateAbout -> rot_arrow @@ space_arrow last_arrow
+        | MultMatrix -> scad_type_arrow ~loc "MultMatrix" @@ last_arrow
+        | Quaternion -> scad_type_arrow ~loc "Quaternion" @@ last_arrow
+        | QuaternionAbout ->
+          scad_type_arrow ~loc "Quaternion" @@ scad_type_arrow ~loc "Vec3" @@ last_arrow
+        | _ -> space_arrow last_arrow
+      in
+      psig_value
+        ~loc
+        { pval_name = { loc; txt = name }
+        ; pval_type
+        ; pval_attributes = []
+        ; pval_loc = loc
+        ; pval_prim = []
+        }
+    in
+    List.map ~f:gen_sig transforms
   in
   List.concat_map ~f type_declarations
 
