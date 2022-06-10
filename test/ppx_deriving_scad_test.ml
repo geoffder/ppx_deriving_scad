@@ -14,19 +14,29 @@ type with_ignored =
 [@@deriving scad]
 
 module ScadVec : sig
-  type 's t =
-    { scad : 's Scad.t
-    ; scad_2d : Scad.d2
-    ; scad_3d : Scad.d3
+  type t =
+    { scad : Scad.d3
     ; vec_pair : vec_pair
     }
   [@@deriving scad]
 end = struct
-  type 's t =
-    { scad : 's Scad.t
-    ; scad_2d : Scad.d2
-    ; scad_3d : Scad.d3
+  type t =
+    { scad : Scad.d3
     ; vec_pair : vec_pair
+    }
+  [@@deriving scad]
+end
+
+module PolyScads : sig
+  type ('s, 'r) t =
+    { a : ('s, 'r) Scad.t
+    ; b : ('s, 'r) Scad.t
+    }
+  [@@deriving scad]
+end = struct
+  type ('s, 'r) t =
+    { a : ('s, 'r) Scad.t
+    ; b : ('s, 'r) Scad.t
     }
   [@@deriving scad]
 end
@@ -58,9 +68,9 @@ end = struct
 end
 
 module BareVecList : sig
-  type t = Vec3.t list [@@deriving scad]
+  type t = Vec2.t list [@@deriving scad]
 end = struct
-  type t = Vec3.t list [@@deriving scad]
+  type t = Vec2.t list [@@deriving scad]
 end
 
 module VecRes : sig
@@ -76,7 +86,7 @@ module PolyType : sig
     }
   [@@deriving scad]
 
-  type 'a t = { p : 'a p } [@@deriving scad]
+  type 'a t = { p : 'a p [@scad.d3] } [@@deriving scad]
 end = struct
   type 'a p =
     { a : 'a [@scad.ignore]

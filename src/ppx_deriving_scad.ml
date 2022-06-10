@@ -156,6 +156,8 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
       | [%type: Scad.v3] | [%type: Scad_ml.Scad.v3] ->
         inner_expr name (fix_id "Vec3"), funcs
       | { ptyp_desc = Ptyp_tuple cts; _ } ->
+        (* TODO: check types within tuple for unit / ignored / mapf
+               (logical or with outer attribute) *)
         let tup_expr =
           let argn n = Printf.sprintf "arg%i" n in
           let args =
@@ -265,12 +267,12 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
         Location.raise_errorf
           ~loc
           "Deriving scad transformers for non-abstract/record types is not supported."
-      | Ptype_abstract, Some ct -> Dim.check ~loc ct
+      | Ptype_abstract, Some ct -> Dim.decide_type ~loc ct
       | Ptype_abstract, None ->
         Location.raise_errorf
           ~loc
           "Scad transformers cannot be derived for empty abstract types."
-      | Ptype_record _, _ -> failwith "implement record dim checking"
+      | Ptype_record fields, _ -> Dim.decide_record ~loc fields
     in
     let space_arrow, rot_arrow, transforms =
       match dim with
