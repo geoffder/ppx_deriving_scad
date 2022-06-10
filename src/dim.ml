@@ -100,9 +100,10 @@ let rec check ~loc dim = function
          corresponding flexibility to the impl as well. This may clarify whether
          using first class modules is the right choice, for the rest of the
          attributes, now that more places are using them.) *)
-    Result.bind
-      ~f:(fun init -> List.fold_result ~init ~f:(check ~loc) cts)
-      (check ~loc dim hd)
+    let f dim' ct =
+      if Option.is_some @@ Attr.get_ignore (`Type ct) then Ok dim' else check ~loc dim' ct
+    in
+    Result.bind ~f:(fun init -> List.fold_result ~init ~f cts) (f dim hd)
   | { ptyp_desc = Ptyp_constr (_, []); _ } -> Ok dim
   | { ptyp_desc = Ptyp_constr (_, (arg :: _ as args)); _ } ->
     if List.for_all ~f:(Fn.non Util.is_constr) args then Ok dim else check ~loc dim arg
