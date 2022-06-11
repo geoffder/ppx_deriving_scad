@@ -96,10 +96,6 @@ let rec check ~loc dim = function
     | None -> Ok (Some (Poly (s, r)))
     | _ -> Error PolyMismatch )
   | { ptyp_desc = Ptyp_tuple (hd :: cts); _ } ->
-    (* TODO: should check for ignore on elements of tuples (will be adding the
-         corresponding flexibility to the impl as well. This may clarify whether
-         using first class modules is the right choice, for the rest of the
-         attributes, now that more places are using them.) *)
     let f dim' ct =
       if Option.is_some @@ Attr.get_ignore (`Type ct) then Ok dim' else check ~loc dim' ct
     in
@@ -124,7 +120,7 @@ let decide_record ~loc = function
     let open Result in
     let checker dim ld =
       if Option.is_some @@ Attr.get_ignore (`Field ld)
-      then Ok None
+      then Ok dim
       else
         check ~loc dim ld.pld_type
         >>| function

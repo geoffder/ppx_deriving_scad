@@ -39,14 +39,23 @@ type transform =
   | MultMatrix
   | Quaternion
   | QuaternionAbout
+  | VectorRotateAbout
+  | VectorRotate
   | Scale
   | Mirror
 
-let transforms =
-  [ Translate; Scale; Rotate; RotateAbout; Mirror; Quaternion; QuaternionAbout ]
+(* let transforms = *)
+(*   [ Translate; Scale; Rotate; RotateAbout; Mirror; Quaternion; QuaternionAbout ] *)
 
 let transforms_2d = [ Translate; Rotate; RotateAbout; Scale; Mirror ]
-let transforms_3d = MultMatrix :: Quaternion :: QuaternionAbout :: transforms_2d
+
+let transforms_3d =
+  MultMatrix
+  :: Quaternion
+  :: QuaternionAbout
+  :: VectorRotate
+  :: VectorRotateAbout
+  :: transforms_2d
 
 let transform_to_string = function
   | Translate -> "translate"
@@ -55,16 +64,21 @@ let transform_to_string = function
   | RotateAbout -> "rotate_about_pt"
   | Quaternion -> "quaternion"
   | QuaternionAbout -> "quaternion_about_pt"
+  | VectorRotate -> "vector_rotate"
+  | VectorRotateAbout -> "vector_rotate_about_pt"
   | Mirror -> "mirror"
   | MultMatrix -> "multmatrix"
 
+(* underscored translation and scaling params since they may be ignored by unit *)
 let transform_to_rev_params = function
-  | Translate -> [ "p" ]
-  | Scale -> [ "s" ]
+  | Translate -> [ "_p" ]
+  | Scale -> [ "_s" ]
   | Rotate -> [ "r" ]
-  | RotateAbout -> [ "p"; "r" ]
+  | RotateAbout -> [ "_p"; "r" ]
   | Quaternion -> [ "q" ]
-  | QuaternionAbout -> [ "p"; "q" ]
+  | QuaternionAbout -> [ "_p"; "q" ]
+  | VectorRotate -> [ "a"; "ax" ]
+  | VectorRotateAbout -> [ "_p"; "a"; "ax" ]
   | Mirror -> [ "ax" ]
   | MultMatrix -> [ "m" ]
 
@@ -121,75 +135,76 @@ let map ~lid ~jane ~loc expr =
   if jane then [%expr [%e id] ~f:[%e expr]] else [%expr [%e id] [%e expr]]
 
 let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
-  let is_unit = Option.is_some @@ Attr.get_unit kind
-  and ignored = Option.is_some @@ Attr.get_ignore kind
-  and jane =
-    (jane || (Option.is_some @@ Attr.get_mapf kind))
-    && (not @@ Option.is_some @@ Attr.get_map kind)
-  in
-  let f (name, params) =
-    let inner_expr name lid =
-      let params =
-        List.fold
-          ~init:[]
-          ~f:(fun ps p -> (Nolabel, pexp_ident ~loc { loc; txt = lident p }) :: ps)
-          params
-      and txt = fun_id name lid in
-      pexp_apply ~loc (pexp_ident ~loc { loc; txt }) params
-    and fix_id m = Longident.(Ldot (Ldot (lident "Scad_ml", m), "t")) in
-    let rec exprs_of_typ funcs next =
-      match next with
-      | [%type: [%t? typ] option] | [%type: [%t? typ] Option.t] ->
-        exprs_of_typ (option_map :: funcs) typ
-      | [%type: [%t? typ] list] | [%type: [%t? typ] List.t] ->
-        exprs_of_typ (list_map :: funcs) typ
-      | [%type: ([%t? typ], [%t? _]) result] | [%type: ([%t? typ], [%t? _]) Result.t] ->
-        exprs_of_typ (result_map :: funcs) typ
-      | [%type: ([%t? _], [%t? _]) Scad.t]
-      | [%type: Scad.d2]
-      | [%type: Scad.d3]
-      | [%type: ([%t? _], [%t? _]) Scad_ml.Scad.t]
-      | [%type: Scad_ml.Scad.d2]
-      | [%type: Scad_ml.Scad.d3] -> inner_expr name (fix_id "Scad"), funcs
-      | [%type: Scad.v2] | [%type: Scad_ml.Scad.v2] ->
-        inner_expr name (fix_id "Vec2"), funcs
-      | [%type: Scad.v3] | [%type: Scad_ml.Scad.v3] ->
-        inner_expr name (fix_id "Vec3"), funcs
-      | { ptyp_desc = Ptyp_tuple cts; _ } ->
-        (* TODO: check types within tuple for unit / ignored / mapf
-               (logical or with outer attribute) *)
-        let tup_expr =
-          let argn n = Printf.sprintf "arg%i" n in
-          let args =
-            let arg_var i _ = ppat_var ~loc { loc; txt = argn i } in
-            ppat_tuple ~loc (List.mapi ~f:arg_var cts)
-          and sub_exprs =
-            let f i c =
-              let apply expr m = [%expr [%e m ~loc expr] [%e evar ~loc (argn i)]]
-              and expr, maps = exprs_of_typ [] c in
-              List.fold ~f:apply ~init:expr maps
-            in
-            List.mapi ~f cts
+  let inner_expr (attrs : Attr.t) lid =
+    let open Option in
+    transform_to_names attrs.unit transform
+    >>= some_if (not attrs.ignored)
+    |> value_map
+         ~default:[%expr fun a -> a]
+         ~f:(fun (name, params) ->
+           let params =
+             List.fold
+               ~init:[]
+               ~f:(fun ps p -> (Nolabel, pexp_ident ~loc { loc; txt = lident p }) :: ps)
+               params
+           and txt = fun_id name lid in
+           pexp_apply ~loc (pexp_ident ~loc { loc; txt }) params )
+  and fix_id m = Longident.(Ldot (Ldot (lident "Scad_ml", m), "t")) in
+  let rec exprs_of_typ attrs funcs next =
+    let attrs = Attr.update attrs (`Type next) in
+    match next with
+    | [%type: [%t? typ] option] | [%type: [%t? typ] Option.t] ->
+      exprs_of_typ attrs (option_map :: funcs) typ
+    | [%type: [%t? typ] list] | [%type: [%t? typ] List.t] ->
+      exprs_of_typ attrs (list_map :: funcs) typ
+    | [%type: ([%t? typ], [%t? _]) result] | [%type: ([%t? typ], [%t? _]) Result.t] ->
+      exprs_of_typ attrs (result_map :: funcs) typ
+    | [%type: ([%t? _], [%t? _]) Scad.t]
+    | [%type: Scad.d2]
+    | [%type: Scad.d3]
+    | [%type: ([%t? _], [%t? _]) Scad_ml.Scad.t]
+    | [%type: Scad_ml.Scad.d2]
+    | [%type: Scad_ml.Scad.d3] -> inner_expr attrs (fix_id "Scad"), funcs
+    | [%type: Scad.v2] | [%type: Scad_ml.Scad.v2] ->
+      inner_expr attrs (fix_id "Vec2"), funcs
+    | [%type: Scad.v3] | [%type: Scad_ml.Scad.v3] ->
+      inner_expr attrs (fix_id "Vec3"), funcs
+    | { ptyp_desc = Ptyp_tuple cts; _ } ->
+      let tup_expr =
+        let argn n = Printf.sprintf "arg%i" n in
+        let args =
+          let arg_var i _ = ppat_var ~loc { loc; txt = argn i } in
+          ppat_tuple ~loc (List.mapi ~f:arg_var cts)
+        and sub_exprs =
+          let f i c =
+            let apply expr m = [%expr [%e m ~loc expr] [%e evar ~loc (argn i)]]
+            and expr, maps = exprs_of_typ attrs [] c in
+            List.fold ~f:apply ~init:expr maps
           in
-          [%expr fun [%p args] -> [%e pexp_tuple ~loc sub_exprs]]
+          List.mapi ~f cts
         in
-        tup_expr, funcs
-      | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, []); _ } ->
-        inner_expr name lid, funcs
-      | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, (arg :: _ as args)); _ } ->
-        if List.for_all ~f:(Fn.non Util.is_constr) args
-        then inner_expr name lid, funcs
-        else exprs_of_typ (map ~lid ~jane :: funcs) arg
-      | ct -> Location.raise_errorf ~loc "Unhandled type: %s" (string_of_core_type ct)
-    in
-    let expr, maps = exprs_of_typ [] ct in
-    List.fold ~f:(fun expr m -> [%expr [%e m ~loc expr]]) ~init:expr maps
+        [%expr fun [%p args] -> [%e pexp_tuple ~loc sub_exprs]]
+      in
+      tup_expr, funcs
+    | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, []); _ } -> inner_expr attrs lid, funcs
+    | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, (arg :: _ as args)); _ } ->
+      if List.for_all ~f:(Fn.non Util.is_constr) args
+      then inner_expr attrs lid, funcs
+      else exprs_of_typ attrs (map ~lid ~jane :: funcs) arg
+    | ct -> Location.raise_errorf ~loc "Unhandled type: %s" (string_of_core_type ct)
   in
-  Option.(
-    value_map
-      ~f
-      ~default:[%expr fun a -> a]
-      (transform_to_names is_unit transform >>= some_if (not ignored)))
+  let attrs = Attr.(update { unit = false; ignored = false; jane } kind) in
+  if attrs.ignored
+  then [%expr fun a -> a]
+  else (
+    let expr, maps = exprs_of_typ attrs [] ct in
+    List.fold ~f:(fun expr m -> [%expr [%e m ~loc expr]]) ~init:expr maps )
+(* in *)
+(* Option.( *)
+(*   value_map *)
+(*     ~f *)
+(*     ~default:[%expr fun a -> a] *)
+(*     (transform_to_names is_unit transform >>= some_if (not ignored))) *)
 
 let transformer ~loc ~transform (td : type_declaration) expr =
   let name =
@@ -228,6 +243,10 @@ let record_transformer ~loc ~jane ~transform (td : type_declaration) fields =
 
 let transformer_impl ~jane ~ctxt (_rec_flag, type_declarations) =
   let loc = Expansion_context.Deriver.derived_item_loc ctxt in
+  let transforms = function
+    | Dim.D2 | Poly _ -> transforms_2d
+    | D3 -> transforms_3d
+  in
   let f (td : type_declaration) =
     match td with
     | { ptype_kind = Ptype_variant _ | Ptype_open; _ } ->
@@ -241,11 +260,11 @@ let transformer_impl ~jane ~ctxt (_rec_flag, type_declarations) =
     | { ptype_kind = Ptype_abstract; ptype_manifest = Some ct; _ } ->
       List.map
         ~f:(fun transform -> abstract_transformer ~loc ~jane ~transform td ct)
-        transforms
+        (transforms @@ Dim.decide_type ~loc ct)
     | { ptype_kind = Ptype_record fields; _ } ->
       List.map
         ~f:(fun transform -> record_transformer ~loc ~jane ~transform td fields)
-        transforms
+        (transforms @@ Dim.decide_record ~loc fields)
   in
   List.concat_map ~f type_declarations
 
@@ -305,7 +324,10 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
         | MultMatrix -> scad_type_arrow ~loc "MultMatrix" @@ last_arrow
         | Quaternion -> scad_type_arrow ~loc "Quaternion" @@ last_arrow
         | QuaternionAbout ->
-          scad_type_arrow ~loc "Quaternion" @@ scad_type_arrow ~loc "Vec3" @@ last_arrow
+          scad_type_arrow ~loc "Quaternion" @@ space_arrow @@ last_arrow
+        | VectorRotate -> space_arrow @@ float_type_arrow ~loc @@ last_arrow
+        | VectorRotateAbout ->
+          space_arrow @@ float_type_arrow ~loc @@ space_arrow @@ last_arrow
         | _ -> space_arrow last_arrow
       in
       psig_value
