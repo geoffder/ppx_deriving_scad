@@ -2,36 +2,6 @@ open! Ppxlib
 open! Base
 open! Ast_builder.Default
 
-(** TODO: rethink architecture to adapt to new 2d/3d restrictions
-   At the moment:
-    - all transforms are 3d
-    - type parameters of Scad are not considered
-    - Vec3.t is the transform input type for all transforms and rotations
-    - 2d and 3d mixing in product types is allowed
-   Goals:
-    - must only apply 3d transforms to 3d types (Quaternion/MultMatrix)
-    - 2d and 3d vectors/shapes cannot be mixed in the same type (the
-      transformation types according to the type params of the scad GADT must be
-      respected)
-   Plan:
-    - rather than recursively building the expressions being the first time
-     that the full depth of the types is covered, they need to be checked first
-     to check what dimensional (2d/3d) system they belong to, and check that
-     they are the same
-      - NOTE: how much of should be left up failing typechecking, or
-        the outer parameter types not matching those required by the target
-        module functions?
-      - Due to the inapplicability of Quaternion/Multmatrix to 2d space, I think
-        I do need to cover the depth first so I can select the correct
-        transformation list
-    - once dimensional system is known, select the correct types for the
-      generated signatures (v3/v3 or v2/float). Since I need to know the
-      dimension for signatures as well as implementations, the space type check
-      should be a separate function *)
-
-(* NOTE: if a dim check comes back dimensionless, a ppx error will be raised if
-    the user has not provided an attribute that disambiguates it *)
-
 type transform =
   | Translate
   | Rotate
@@ -43,9 +13,6 @@ type transform =
   | VectorRotate
   | Scale
   | Mirror
-
-(* let transforms = *)
-(*   [ Translate; Scale; Rotate; RotateAbout; Mirror; Quaternion; QuaternionAbout ] *)
 
 let transforms_2d = [ Translate; Rotate; RotateAbout; Scale; Mirror ]
 
@@ -151,7 +118,7 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
            pexp_apply ~loc (pexp_ident ~loc { loc; txt }) params )
   and fix_id m = Longident.(Ldot (Ldot (lident "Scad_ml", m), "t")) in
   let rec exprs_of_typ attrs funcs next =
-    let attrs = Attr.update attrs (`Type next) in
+    let attrs = Attr.update ~loc attrs (`Type next) in
     match next with
     | [%type: [%t? typ] option] | [%type: [%t? typ] Option.t] ->
       exprs_of_typ attrs (option_map :: funcs) typ
@@ -193,18 +160,12 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
       else exprs_of_typ attrs (map ~lid ~jane :: funcs) arg
     | ct -> Location.raise_errorf ~loc "Unhandled type: %s" (string_of_core_type ct)
   in
-  let attrs = Attr.(update { unit = false; ignored = false; jane } kind) in
+  let attrs = Attr.(update ~loc { unit = false; ignored = false; jane } kind) in
   if attrs.ignored
   then [%expr fun a -> a]
   else (
     let expr, maps = exprs_of_typ attrs [] ct in
     List.fold ~f:(fun expr m -> [%expr [%e m ~loc expr]]) ~init:expr maps )
-(* in *)
-(* Option.( *)
-(*   value_map *)
-(*     ~f *)
-(*     ~default:[%expr fun a -> a] *)
-(*     (transform_to_names is_unit transform >>= some_if (not ignored))) *)
 
 let transformer ~loc ~transform (td : type_declaration) expr =
   let name =

@@ -61,28 +61,14 @@ let get_mapf = function
   | `Type ct -> Attribute.get Type.mapf ct
   | `Field ld -> Attribute.get Field.mapf ld
 
-let update t kind =
+let update ~loc t kind =
   { unit = t.unit || (Option.is_some @@ get_unit kind)
   ; ignored = t.ignored || (Option.is_some @@ get_ignore kind)
   ; jane =
-      (t.jane || (Option.is_some @@ get_mapf kind))
-      && (not @@ Option.is_some @@ get_map kind)
+      ( match get_map kind, get_mapf kind with
+      | None, None -> t.jane
+      | None, Some () -> true
+      | Some (), None -> false
+      | Some (), Some () ->
+        Location.raise_errorf ~loc "Cannot specify both map and mapf attributes." )
   }
-
-(* let is_unit (type a) (module A : S with type t = a) (a : a) = *)
-(*   Option.is_some @@ Attribute.get A.unit a *)
-
-(* let is_ignore (type a) (module A : S with type t = a) (a : a) = *)
-(*   Option.is_some @@ Attribute.get A.ignore a *)
-
-(* let is_map (type a) (module A : S with type t = a) (a : a) = *)
-(*   Option.is_some @@ Attribute.get A.map a *)
-
-(* let is_mapf (type a) (module A : S with type t = a) (a : a) = *)
-(*   Option.is_some @@ Attribute.get A.mapf a *)
-
-(* let update (type a) (module A : S with type t = a) t (a : a) = *)
-(*   { unit = t.unit || is_unit (module A) a *)
-(*   ; ignored = t.ignored || is_ignore (module A) a *)
-(*   ; jane = (t.jane || is_mapf (module A) a) && (not @@ is_map (module A) a) *)
-(*   } *)
