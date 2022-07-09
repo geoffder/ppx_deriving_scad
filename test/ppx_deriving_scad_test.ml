@@ -103,6 +103,12 @@ end = struct
   type t = (Vec3.t option * Vec3.t option) option [@@deriving scad]
 end
 
+module Tris : sig
+  type t = (Vec2.t * Vec2.t * Vec2.t) list [@@deriving scad]
+end = struct
+  type t = (Vec2.t * Vec2.t * Vec2.t) list [@@deriving scad]
+end
+
 let%test "rotate_about_pair" =
   let a = { reg = v3 5. 5. 0.; unit = v3 0. 1. 0. }
   and r = v3 0. 0. (Float.pi /. 2.)
