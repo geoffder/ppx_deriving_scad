@@ -146,7 +146,9 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
           let f i c =
             let apply expr m = [%expr [%e m ~loc expr] [%e evar ~loc (argn i)]]
             and expr, maps = exprs_of_typ attrs [] c in
-            List.fold ~f:apply ~init:expr maps
+            if List.is_empty maps
+            then [%expr [%e expr] [%e evar ~loc (argn i)]]
+            else List.fold ~f:apply ~init:expr maps
           in
           List.mapi ~f cts
         in
