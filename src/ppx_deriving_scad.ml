@@ -117,57 +117,57 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
            and txt = fun_id name lid in
            pexp_apply ~loc (pexp_ident ~loc { loc; txt }) params )
   and fix_id m = Longident.(Ldot (Ldot (lident "Scad_ml", m), "t")) in
-  let rec exprs_of_typ attrs funcs next =
-    let attrs = Attr.update ~loc attrs (`Type next) in
-    match next with
-    | [%type: [%t? typ] option] | [%type: [%t? typ] Option.t] ->
-      exprs_of_typ attrs (option_map :: funcs) typ
-    | [%type: [%t? typ] list] | [%type: [%t? typ] List.t] ->
-      exprs_of_typ attrs (list_map :: funcs) typ
-    | [%type: ([%t? typ], [%t? _]) result] | [%type: ([%t? typ], [%t? _]) Result.t] ->
-      exprs_of_typ attrs (result_map :: funcs) typ
-    | [%type: ([%t? _], [%t? _]) Scad.t]
-    | [%type: Scad.d2]
-    | [%type: Scad.d3]
-    | [%type: ([%t? _], [%t? _]) Scad_ml.Scad.t]
-    | [%type: Scad_ml.Scad.d2]
-    | [%type: Scad_ml.Scad.d3] -> inner_expr attrs (fix_id "Scad"), funcs
-    | [%type: Scad.v2] | [%type: Scad_ml.Scad.v2] ->
-      inner_expr attrs (fix_id "Vec2"), funcs
-    | [%type: Scad.v3] | [%type: Scad_ml.Scad.v3] ->
-      inner_expr attrs (fix_id "Vec3"), funcs
-    | { ptyp_desc = Ptyp_tuple cts; _ } ->
-      let tup_expr =
-        let argn n = Printf.sprintf "arg%i" n in
-        let args =
-          let arg_var i _ = ppat_var ~loc { loc; txt = argn i } in
-          ppat_tuple ~loc (List.mapi ~f:arg_var cts)
-        and sub_exprs =
-          let f i c =
-            let apply expr m = [%expr [%e m ~loc expr] [%e evar ~loc (argn i)]]
-            and expr, maps = exprs_of_typ attrs [] c in
-            if List.is_empty maps
-            then [%expr [%e expr] [%e evar ~loc (argn i)]]
-            else List.fold ~f:apply ~init:expr maps
+  let expr_of_typ attrs ct =
+    let map_exprs (expr, maps) =
+      List.fold ~f:(fun expr m -> [%expr [%e m ~loc expr]]) ~init:expr maps
+    in
+    let rec aux attrs funcs next =
+      let attrs = Attr.update ~loc attrs (`Type next) in
+      match next with
+      | [%type: [%t? typ] option] | [%type: [%t? typ] Option.t] ->
+        aux attrs (option_map :: funcs) typ
+      | [%type: [%t? typ] list] | [%type: [%t? typ] List.t] ->
+        aux attrs (list_map :: funcs) typ
+      | [%type: ([%t? typ], [%t? _]) result] | [%type: ([%t? typ], [%t? _]) Result.t] ->
+        aux attrs (result_map :: funcs) typ
+      | [%type: ([%t? _], [%t? _]) Scad.t]
+      | [%type: Scad.d2]
+      | [%type: Scad.d3]
+      | [%type: ([%t? _], [%t? _]) Scad_ml.Scad.t]
+      | [%type: Scad_ml.Scad.d2]
+      | [%type: Scad_ml.Scad.d3] -> inner_expr attrs (fix_id "Scad"), funcs
+      | [%type: Scad.v2] | [%type: Scad_ml.Scad.v2] ->
+        inner_expr attrs (fix_id "Vec2"), funcs
+      | [%type: Scad.v3] | [%type: Scad_ml.Scad.v3] ->
+        inner_expr attrs (fix_id "Vec3"), funcs
+      | { ptyp_desc = Ptyp_tuple cts; _ } ->
+        let tup_expr =
+          let argn n = Printf.sprintf "arg%i" n in
+          let args =
+            let arg_var i _ = ppat_var ~loc { loc; txt = argn i } in
+            ppat_tuple ~loc (List.mapi ~f:arg_var cts)
+          and sub_exprs =
+            let f i c =
+              let expr = map_exprs (aux attrs [] c) in
+              [%expr [%e expr] [%e evar ~loc (argn i)]]
+            in
+            List.mapi ~f cts
           in
-          List.mapi ~f cts
+          [%expr fun [%p args] -> [%e pexp_tuple ~loc sub_exprs]]
         in
-        [%expr fun [%p args] -> [%e pexp_tuple ~loc sub_exprs]]
-      in
-      tup_expr, funcs
-    | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, []); _ } -> inner_expr attrs lid, funcs
-    | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, (arg :: _ as args)); _ } ->
-      if List.for_all ~f:(Fn.non Util.is_constr) args
-      then inner_expr attrs lid, funcs
-      else exprs_of_typ attrs (map ~lid ~jane :: funcs) arg
-    | ct -> Location.raise_errorf ~loc "Unhandled type: %s" (string_of_core_type ct)
+        tup_expr, funcs
+      | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, []); _ } ->
+        inner_expr attrs lid, funcs
+      | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, (arg :: _ as args)); _ } ->
+        if List.for_all ~f:(Fn.non Util.is_constr) args
+        then inner_expr attrs lid, funcs
+        else aux attrs (map ~lid ~jane :: funcs) arg
+      | ct -> Location.raise_errorf ~loc "Unhandled type: %s" (string_of_core_type ct)
+    in
+    map_exprs (aux attrs [] ct)
   in
   let attrs = Attr.(update ~loc { unit = false; ignored = false; jane } kind) in
-  if attrs.ignored
-  then [%expr fun a -> a]
-  else (
-    let expr, maps = exprs_of_typ attrs [] ct in
-    List.fold ~f:(fun expr m -> [%expr [%e m ~loc expr]]) ~init:expr maps )
+  if attrs.ignored then [%expr fun a -> a] else expr_of_typ attrs ct
 
 let transformer ~loc ~transform (td : type_declaration) expr =
   let name =
