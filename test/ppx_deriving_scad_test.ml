@@ -98,9 +98,9 @@ end = struct
 end
 
 module VecTupleOpt : sig
-  type t = (Vec3.t option * Vec3.t option) option [@@deriving scad]
+  type t = (Vec3.t option * Vec3.t option option) option [@@deriving scad]
 end = struct
-  type t = (Vec3.t option * Vec3.t option) option [@@deriving scad]
+  type t = (Vec3.t option * Vec3.t option option) option [@@deriving scad]
 end
 
 module Tris : sig
