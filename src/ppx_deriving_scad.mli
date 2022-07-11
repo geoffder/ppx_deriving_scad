@@ -119,10 +119,16 @@
     signatures.
 
     {[
-      module MaybeScad : sig
-        type 's t = 's Scad.t option [@@deriving scad]
+      module PolyScads : sig
+        type ('s, 'r) t =
+          { a : ('s, 'r) Scad.t
+          ; b : ('s, 'r) Scad.t
+          } [@@deriving scad]
       end = struct
-        type 's t = 's Scad.t option [@@deriving scad]
+        type ('s, 'r) t =
+          { a : ('s, 'r) Scad.t
+          ; b : ('s, 'r) Scad.t
+          } [@@deriving scad]
       end
     ]}
 
