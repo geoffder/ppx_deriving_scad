@@ -1,5 +1,4 @@
 open! Ppxlib
-open! Base
 open! Ast_builder.Default
 
 type t =
@@ -12,13 +11,6 @@ type error =
   | PolyCollapse
   | PolyMismatch
   | UnknownDimension
-
-(* let equal a b = *)
-(*   match a, b with *)
-(*   | D2, D2 -> true *)
-(*   | D3, D3 -> true *)
-(*   | Poly (s1, r1), Poly (s2, r2) -> String.equal s1 s2 && String.equal r1 r2 *)
-(*   | _ -> false *)
 
 let unwrap_result ~loc res =
   let r = Location.raise_errorf ~loc in
@@ -99,10 +91,10 @@ let rec check ~loc dim = function
     let f dim' ct =
       if Option.is_some @@ Attr.get_ignore (`Type ct) then Ok dim' else check ~loc dim' ct
     in
-    Result.bind ~f:(fun init -> List.fold_result ~init ~f cts) (f dim hd)
+    Result.bind (f dim hd) (fun init -> Util.list_fold_result f init cts)
   | { ptyp_desc = Ptyp_constr (_, []); _ } -> Ok dim
   | { ptyp_desc = Ptyp_constr (_, (arg :: _ as args)); _ } ->
-    if List.for_all ~f:(Fn.non Util.is_constr) args then Ok dim else check ~loc dim arg
+    if List.for_all (Fun.negate Util.is_constr) args then Ok dim else check ~loc dim arg
   (* TODO: consider allowing type variables if they can be pegged
          to a Scad.t's 'space parameter (v2 or v3). *)
   | ct -> Location.raise_errorf ~loc "Unhandled type: %s" (string_of_core_type ct)
@@ -112,21 +104,19 @@ let decide_type ~loc ct =
     | None -> dim_attr ~loc (module Attr.Type) ct
     | d -> d
   in
-  unwrap_result ~loc @@ Result.map ~f (check ~loc None ct)
+  unwrap_result ~loc @@ Result.map f (check ~loc None ct)
 
 let decide_record ~loc = function
   | [] -> Location.raise_errorf ~loc "Cannot transform empty record."
   | (hd : label_declaration) :: tl ->
-    let open Result in
     let checker dim ld =
       if Option.is_some @@ Attr.get_ignore (`Field ld)
       then Ok dim
       else
         check ~loc dim ld.pld_type
-        >>| function
-        | None -> dim_attr ~loc (module Attr.Field) ld
-        | d -> d
+        |> Result.map (function
+               | None -> dim_attr ~loc (module Attr.Field) ld
+               | d -> d )
     in
-    checker None hd
-    >>= (fun init -> List.fold_result ~init ~f:checker tl)
+    Result.bind (checker None hd) (fun init -> Util.list_fold_result checker init tl)
     |> unwrap_result ~loc
