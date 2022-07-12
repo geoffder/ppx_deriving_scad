@@ -51,6 +51,7 @@ let transform_to_rev_params = function
 let transform_drop_about = function
   | RotateAbout -> Rotate
   | QuaternionAbout -> Quaternion
+  | VectorRotateAbout -> VectorRotate
   | trans -> trans
 
 let transform_to_names is_unit transform =
@@ -78,7 +79,7 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
     |> Option.value ~default:[%expr fun a -> a]
   and fix_id m = Longident.(Ldot (Ldot (lident "Scad_ml", m), "t")) in
   let expr_of_typ attrs ct =
-    let map_exprs (expr, maps) =
+    let apply_map_exprs (expr, maps) =
       List.fold_left (fun expr m -> [%expr [%e m ~loc expr]]) expr maps
     in
     let rec aux attrs funcs next =
@@ -96,10 +97,8 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
       | [%type: ([%t? _], [%t? _]) Scad_ml.Scad.t]
       | [%type: Scad_ml.Scad.d2]
       | [%type: Scad_ml.Scad.d3] -> inner_expr attrs (fix_id "Scad"), funcs
-      | [%type: Scad.v2] | [%type: Scad_ml.Scad.v2] ->
-        inner_expr attrs (fix_id "Vec2"), funcs
-      | [%type: Scad.v3] | [%type: Scad_ml.Scad.v3] ->
-        inner_expr attrs (fix_id "Vec3"), funcs
+      | [%type: v2] | [%type: Scad_ml.v2] -> inner_expr attrs (fix_id "Vec2"), funcs
+      | [%type: v3] | [%type: Scad_ml.v3] -> inner_expr attrs (fix_id "Vec3"), funcs
       | { ptyp_desc = Ptyp_tuple cts; _ } ->
         let tup_expr =
           let argn n = Printf.sprintf "arg%i" n in
@@ -108,7 +107,7 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
             ppat_tuple ~loc (List.mapi arg_var cts)
           and sub_exprs =
             let f i c =
-              let expr = map_exprs (aux attrs [] c) in
+              let expr = apply_map_exprs (aux attrs [] c) in
               [%expr [%e expr] [%e evar ~loc (argn i)]]
             in
             List.mapi f cts
@@ -121,10 +120,10 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
       | { ptyp_desc = Ptyp_constr ({ txt = lid; _ }, (arg :: _ as args)); _ } ->
         if List.for_all (Fun.negate Util.is_constr) args
         then inner_expr attrs lid, funcs
-        else aux attrs (Util.map_expr ~lid ~jane :: funcs) arg
+        else aux attrs (Util.map_expr ~lid ~jane:attrs.jane :: funcs) arg
       | ct -> Location.raise_errorf ~loc "Unhandled type: %s" (string_of_core_type ct)
     in
-    map_exprs (aux attrs [] ct)
+    apply_map_exprs (aux attrs [] ct)
   in
   let attrs = Attr.(update ~loc { unit = false; ignored = false; jane } kind) in
   if attrs.ignored then [%expr fun a -> a] else expr_of_typ attrs ct

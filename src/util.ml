@@ -41,7 +41,7 @@ let rec is_jane_map = function
 
 let map_expr ~lid ~jane ~loc expr =
   let lid = if jane && is_jane_map lid then Longident.Ldot (lident "Map", "t") else lid in
-  let id = pexp_ident ~loc @@ { loc; txt = fun_id "map" lid } in
+  let id = pexp_ident ~loc { loc; txt = fun_id "map" lid } in
   if jane then [%expr [%e id] ~f:[%e expr]] else [%expr [%e id] [%e expr]]
 
 let list_fold_result f init l =
