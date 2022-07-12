@@ -67,6 +67,23 @@ end = struct
   type t = Vec3.t Map.M(Int).t [@@deriving scad_jane]
 end
 
+(* aliased to avoid generating option map expression (test map function finding) *)
+module JaneOption = Option
+
+module MixedMapConventions : sig
+  type t =
+    { std : Vec3.t IntMap.t
+    ; jane : Vec3.t JaneOption.t
+    }
+  [@@deriving scad]
+end = struct
+  type t =
+    { std : Vec3.t IntMap.t
+    ; jane : Vec3.t JaneOption.t [@scad.mapf]
+    }
+  [@@deriving scad]
+end
+
 module BareVecList : sig
   type t = Vec2.t list [@@deriving scad]
 end = struct
@@ -79,28 +96,29 @@ end = struct
   type t = { res : (Vec3.t, string) Result.t } [@@deriving scad]
 end
 
-module PolyType : sig
+module AmbiguousDims : sig
   type 'a p =
     { a : 'a [@scad.ignore]
-    ; v : Vec3.t
+    ; v : v2
     }
   [@@deriving scad]
 
-  type 'a t = { p : 'a p [@scad.d3] } [@@deriving scad]
+  type 'a t = { p : 'a p [@scad.d2] } [@@deriving scad]
 end = struct
   type 'a p =
     { a : 'a [@scad.ignore]
-    ; v : Vec3.t
+    ; v : v2
     }
   [@@deriving scad]
 
-  type 'a t = { p : 'a p [@scad.d3] } [@@deriving scad]
+  type 'a t = { p : 'a p [@scad.d2] } [@@deriving scad]
 end
 
 module VecTupleOpt : sig
-  type t = (Vec3.t option * Vec3.t option option) option [@@deriving scad]
+  type t = (Vec3.t JaneOption.t * Vec3.t option option) option [@@deriving scad]
 end = struct
-  type t = (Vec3.t option * Vec3.t option option) option [@@deriving scad]
+  type t = ((Vec3.t JaneOption.t[@scad.mapf]) * Vec3.t option option) option
+  [@@deriving scad]
 end
 
 module Tris : sig
