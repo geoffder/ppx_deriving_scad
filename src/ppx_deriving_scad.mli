@@ -2,9 +2,8 @@
 
     A PPX deriver that generates functions for the spatial transformation of user defined
     abstract and record types containing types for which said transformation functions are
-    defined, in particular, the {!Scad_ml.Scad.t}, {!Scad_ml.Vec3.t}, and
-    {!Scad_ml.Vec2.t} types of the {{:https://github.com/namachan10777/scad-ml}
-    Scad_ml library}.
+    defined, in particular, the [Scad_ml.Scad.t], [Scad_ml.Vec3.t], and [Scad_ml.Vec2.t]
+    types of the {{:https://github.com/namachan10777/scad-ml} Scad_ml library}.
 
     {b For example:}
 
@@ -35,9 +34,8 @@
 
     If the name of the type being derived is [t], then the functions generated (and those
     required to be present for the types inside of a type/record being derived) will be
-    given unqualified names. For example, applying [\[@@deriving scad\]] to a
-    lone record type [t] would give a module that adhered to the following
-    signature.
+    given unqualified names. For example, applying [\[@@deriving scad\]] to a lone record
+    type [t] would give a module that adhered to the following signature.
 
     {[
       open Scad_ml
@@ -67,10 +65,12 @@
       end
     ]}
 
-    {1 Basic monadic types and tuples}
+    {1:mappable Basic mappable types and tuples}
 
     The [list], [option], and [result] types, as well as {b tuples}, are automatically
-    mapped over, without any additional annotation or functions provided.
+    mapped over, without any additional annotation or functions provided. Note the set of
+    functions generated here is restricted to those that are strictly relevant to {b 2d}
+    shapes/vectors compared to the first examples that contained {b 3d} types.
 
     {[
       module Tris : sig
@@ -95,12 +95,12 @@
     {[
       module IntMap = Map.Make (Int)
 
-      type vec_map = Vec3.t IntMap.t [@@deriving scad]
+      type v3_map = Vec3.t IntMap.t [@@deriving scad]
     ]}
 
     Here, [IntMap.map] will be used to apply transformations to the contained
-    {!Scad_ml.Vec3.t} elements. The expected map function should obey the convention of
-    the function [f] being the first {i positional} argument. If you are following the
+    [Scad_ml.Vec3.t] elements. The expected map function should obey the convention of the
+    function [f] being the first {i positional} argument. If you are following the
     conventions of JaneStreet and/or have [base]/[core] open, then you may use
     [\[@@deriving scad_jane\]] which defaults to expecting [map] functions to accept a
     keyword parameter [~f] instead. If you are deriving a record containing types with
@@ -113,7 +113,7 @@
     instead [Vec3.t int_map], the function [int_map_map] will be expected in the scope of
     the derived type.
 
-    {1 Intf generation}
+    {1 Intf generation and dimensional polymorphism}
 
     Annotating types in module sigs and [.mli] files will generate the relevant type
     signatures.
@@ -123,14 +123,21 @@
         type ('s, 'r) t =
           { a : ('s, 'r) Scad.t
           ; b : ('s, 'r) Scad.t
-          } [@@deriving scad]
+          }
+        [@@deriving scad]
       end = struct
         type ('s, 'r) t =
           { a : ('s, 'r) Scad.t
           ; b : ('s, 'r) Scad.t
-          } [@@deriving scad]
+          }
+        [@@deriving scad]
       end
     ]}
+
+    Note that this is also an example of polymorphism over the dimensionality of the
+    [Scad_ml.Scad.t] type. Of course, when the type could be either {b 2d} or {b 3d}, only
+    {b 2d} transformations will be available (translation, rotation, scaling, and
+    mirroring), as in the {{!mappable} mappable type example}.
 
     {1 Attributes}
 
@@ -159,7 +166,7 @@
 
     {[
       let true =
-        let plane = { scad = Scad.cube (v3 10. 10. 0.001); normal = (v3 0. 0. 1.) } in
+        let plane = { scad = Scad.cube (v3 10. 10. 0.001); normal = v3 0. 0. 1. } in
         let trans = plane_translate (v3 5. 5. 0.) plane in
         Vec3.equal plane.normal trans.normal
     ]}
@@ -199,15 +206,53 @@
     {[
       open Base
       module IntMap = Caml.Map.Make (Int)
+      module JaneOption = Option (* aliased since option is special cased *)
 
-      module MixedMaps = struct
+      module MixedMapConventions : sig
         type t =
-          { std : Vec3.t IntMap.t
-          ; jane : (Vec3.t Map.M(Int).t[@scad.mapf])
+          { std : v3 IntMap.t
+          ; jane : v3 JaneOption.t
+          }
+        [@@deriving scad]
+      end = struct
+        type t =
+          { std : v3 IntMap.t
+          ; jane : v3 JaneOption.t [@scad.mapf]
           }
         [@@deriving scad]
       end
-    ]} *)
+    ]}
+
+    {2 \[\@scad.d2\] and \[\@scad.d3\]}
+
+    When the dimensionality of a type is ambiguous (e.g. containing no fields with
+    concretely dimensional types from [Scad_ml] such as [Scad.d3], or [Vec2.t]), these
+    annotations should be used to specify the correct set of functions/signatures to be
+    generated.
+
+    {[
+      module AmbiguousDims : sig
+        type 'a p =
+          { a : 'a [@scad.ignore]
+          ; v : v2
+          }
+        [@@deriving scad]
+
+        type 'a t = { p : 'a p [@scad.d2] } [@@deriving scad]
+      end = struct
+        type 'a p =
+          { a : 'a [@scad.ignore]
+          ; v : v2
+          }
+        [@@deriving scad]
+
+        type 'a t = { p : 'a p [@scad.d2] } [@@deriving scad]
+      end
+    ]}
+
+    Here, there are no [Scad_ml] types present in [a' t] that can clue
+    [\[@@deriving scad\]] into whether it is {b 2d} or {b 3d}, so we tag on an attribute
+    to clear it up. *)
 
 (** \[\@\@deriving scad\]
 

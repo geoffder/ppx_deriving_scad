@@ -56,7 +56,7 @@ end = struct
 end
 ```
 
-## Basic monadic types and tuples
+## Basic mappable types and tuples
 The `list`, `option`, and `result` types, as well as **tuples**, are automatically
 mapped over, without any additional annotation or functions provided.
 ``` ocaml
@@ -113,6 +113,11 @@ end = struct
 end
 ```
 
+Note that this is also an example of polymorphism over the dimensionality of the
+`Scad_ml.Scad.t` type. Of course, when the type could be either **2d** or **3d**, only
+**2d** transformations will be available (translation, rotation, scaling, and
+mirroring), as in the mappable type example.
+
 ## Attributes
 ### [@scad.unit]
 This annotation should be applied to abstract types and fields which represent
@@ -120,8 +125,8 @@ unit vector. Types/fields marked with this will not be subject to
 transformations that would cause them to lose thier identity as such, or rotate
 about anything other than the world origin. Thus:
 
-  - translate and scale will not be applied (identity function instead)
-  - {rotate,quaternion}_about_pt will be replaced by their pivot translation
+  - `translate` and `scale` will not be applied (identity function instead)
+  - `{rotate,quaternion}_about_pt` will be replaced by their pivot translation
     free counterparts
 
 **Usage:**
@@ -167,7 +172,7 @@ to the type declaration.
   - `[@@deriving scad]` -> positional `f` expected (e.g. `map f`)
   - `[@@deriving scad_jane]` -> keyword `~f` expected (e.g. `map ~f`)
 
-Thus, `[@scad.map]`indicates that relevant `map` functions will obey the
+Thus, `[@scad.map]` indicates that relevant `map` functions will obey the
 convention of `f` being the first *positional* argument (overiding `[@@deriving
 scad_jane]`), whereas `[@scad.mapf]` indicates that a keyword argument of `~f`
 is expected instead (overiding `[@@deriving scad]`). These attributes are not
@@ -177,13 +182,51 @@ any functions in scope.
 **Usage:**
 ``` ocaml
 open Base
-
 module IntMap = Caml.Map.Make (Int)
+module JaneOption = Option (* aliased since option is special cased *)
 
-module MixedMaps = struct
+module MixedMapConventions : sig
   type t =
-    { std : Vec3.t IntMap.t
-    ; jane : (Vec3.t Map.M(Int).t [@scad.mapf])
-    } [@@deriving scad]
+    { std : v3 IntMap.t
+    ; jane : v3 JaneOption.t
+    }
+  [@@deriving scad]
+end = struct
+  type t =
+    { std : v3 IntMap.t
+    ; jane : v3 JaneOption.t [@scad.mapf]
+    }
+  [@@deriving scad]
 end
 ```
+
+### [@scad.d2] and [@scad.d3]
+
+When the dimensionality of a type is ambiguous (e.g. containing no fields with
+concretely dimensional types from `Scad_ml` such as `Scad.d3`, or `Vec2.t`), these
+annotations should be used to specify the correct set of functions/signatures to be
+generated.
+
+```ocaml
+module AmbiguousDims : sig
+  type 'a p =
+    { a : 'a [@scad.ignore]
+    ; v : v2
+    }
+  [@@deriving scad]
+
+  type 'a t = { p : 'a p [@scad.d2] } [@@deriving scad]
+end = struct
+  type 'a p =
+    { a : 'a [@scad.ignore]
+    ; v : v2
+    }
+  [@@deriving scad]
+
+  type 'a t = { p : 'a p [@scad.d2] } [@@deriving scad]
+end
+```
+
+Here, there are no `Scad_ml` types present in `a' t` that can clue
+`[@@deriving scad]` into whether it is **2d** or **3d**, so we tag on an attribute
+to clear it up.
