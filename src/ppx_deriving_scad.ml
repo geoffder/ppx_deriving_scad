@@ -4,63 +4,40 @@ open! Ast_builder.Default
 type transform =
   | Translate
   | Rotate
-  | RotateAbout
-  | MultMatrix
   | Quaternion
-  | QuaternionAbout
-  | VectorRotateAbout
-  | VectorRotate
+  | AxisRotate
+  | Affine
   | Scale
   | Mirror
 
-let transforms_2d = [ Translate; Rotate; RotateAbout; Scale; Mirror ]
-
-let transforms_3d =
-  MultMatrix
-  :: Quaternion
-  :: QuaternionAbout
-  :: VectorRotate
-  :: VectorRotateAbout
-  :: transforms_2d
+let transforms_2d = [ Translate; Rotate; Scale; Mirror; Affine ]
+let transforms_3d = Quaternion :: AxisRotate :: transforms_2d
 
 let transform_to_string = function
   | Translate -> "translate"
   | Scale -> "scale"
   | Rotate -> "rotate"
-  | RotateAbout -> "rotate_about_pt"
   | Quaternion -> "quaternion"
-  | QuaternionAbout -> "quaternion_about_pt"
-  | VectorRotate -> "vector_rotate"
-  | VectorRotateAbout -> "vector_rotate_about_pt"
+  | AxisRotate -> "axis_rotate"
   | Mirror -> "mirror"
-  | MultMatrix -> "multmatrix"
+  | Affine -> "affine"
 
 (* underscored translation and scaling params since they may be ignored by unit *)
-let transform_to_rev_params = function
-  | Translate -> [ "_p" ]
-  | Scale -> [ "_s" ]
-  | Rotate -> [ "r" ]
-  | RotateAbout -> [ "_p"; "r" ]
-  | Quaternion -> [ "q" ]
-  | QuaternionAbout -> [ "_p"; "q" ]
-  | VectorRotate -> [ "a"; "ax" ]
-  | VectorRotateAbout -> [ "_p"; "a"; "ax" ]
-  | Mirror -> [ "ax" ]
-  | MultMatrix -> [ "m" ]
-
-let transform_drop_about = function
-  | RotateAbout -> Rotate
-  | QuaternionAbout -> Quaternion
-  | VectorRotateAbout -> VectorRotate
-  | trans -> trans
+let transform_to_rev_params is_unit transform =
+  let about = if is_unit then [] else [ Optional "about", "_p" ] in
+  match transform with
+  | Translate -> [ Nolabel, "_p" ]
+  | Scale -> [ Nolabel, "_s" ]
+  | Rotate -> (Nolabel, "r") :: about
+  | Quaternion -> (Nolabel, "q") :: about
+  | AxisRotate -> (Nolabel, "a") :: (Nolabel, "ax") :: about
+  | Mirror -> [ Nolabel, "ax" ]
+  | Affine -> [ Nolabel, "m" ]
 
 let transform_to_names is_unit transform =
   match is_unit, transform with
   | true, (Translate | Scale) -> None
-  | false, trans -> Some (transform_to_string trans, transform_to_rev_params trans)
-  | true, trans ->
-    let trans' = transform_drop_about trans in
-    Some (transform_to_string trans', transform_to_rev_params trans')
+  | u, trans -> Some (transform_to_string trans, transform_to_rev_params u trans)
 
 let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
   let inner_expr (attrs : Attr.t) lid =
@@ -70,7 +47,7 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
       |> Option.map (fun (name, params) ->
              let params =
                List.fold_left
-                 (fun ps p -> (Nolabel, pexp_ident ~loc { loc; txt = lident p }) :: ps)
+                 (fun ps (lbl, p) -> (lbl, pexp_ident ~loc { loc; txt = lident p }) :: ps)
                  []
                  params
              and txt = Util.fun_id name lid in
@@ -140,9 +117,9 @@ let transformer ~loc ~transform (td : type_declaration) expr =
           else Printf.sprintf "%s_%s" func_name td.ptype_name.txt )
       }
   and func =
-    let f expr txt = pexp_fun ~loc Nolabel None (ppat_var ~loc { loc; txt }) expr
+    let f expr (lbl, txt) = pexp_fun ~loc lbl None (ppat_var ~loc { loc; txt }) expr
     and init = pexp_fun ~loc Nolabel None (ppat_var ~loc { loc; txt = "t" }) expr in
-    List.fold_left f init (transform_to_rev_params transform)
+    List.fold_left f init (transform_to_rev_params false transform)
   in
   [%stri let [%p name] = [%e func]]
 
@@ -190,14 +167,14 @@ let transformer_impl ~jane ~ctxt (_rec_flag, type_declarations) =
   in
   List.concat_map f type_declarations
 
-let scad_type_arrow ~loc name =
+let scad_type_arrow ?(lbl = Nolabel) ~loc name =
   let txt = Longident.Ldot (Longident.Ldot (lident "Scad_ml", name), "t") in
-  ptyp_arrow ~loc Nolabel (ptyp_constr ~loc { loc; txt } [])
+  ptyp_arrow ~loc lbl (ptyp_constr ~loc { loc; txt } [])
 
 let float_type_arrow ~loc =
   ptyp_arrow ~loc Nolabel (ptyp_constr ~loc { loc; txt = lident "float" } [])
 
-let var_type_arrow ~loc v = ptyp_arrow ~loc Nolabel (ptyp_var ~loc v)
+let var_type_arrow ?(lbl = Nolabel) ~loc v = ptyp_arrow ~loc lbl (ptyp_var ~loc v)
 
 let transformer_intf ~ctxt (_rec_flag, type_declarations) =
   let loc = Expansion_context.Deriver.derived_item_loc ctxt in
@@ -215,14 +192,27 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
           "Scad transformers cannot be derived for empty abstract types."
       | Ptype_record fields, _ -> Dim.decide_record ~loc fields
     in
-    let space_arrow, rot_arrow, transforms =
+    let space_arrow, rot_arrow, about_arrow, affine_arrow, transforms =
       match dim with
-      | D2 -> scad_type_arrow ~loc "Vec2", float_type_arrow ~loc, transforms_2d
+      | D2 ->
+        ( scad_type_arrow ~loc "Vec2"
+        , float_type_arrow ~loc
+        , scad_type_arrow ~lbl:(Optional "about") ~loc "Vec2"
+        , scad_type_arrow ~loc "Affine2"
+        , transforms_2d )
       | D3 ->
         let v3_arrow = scad_type_arrow ~loc "Vec3" in
-        v3_arrow, v3_arrow, transforms_3d
-      | Poly (space, rot) ->
-        var_type_arrow ~loc space, var_type_arrow ~loc rot, transforms_2d
+        ( v3_arrow
+        , v3_arrow
+        , scad_type_arrow ~lbl:(Optional "about") ~loc "Vec3"
+        , scad_type_arrow ~loc "Affine3"
+        , transforms_3d )
+      | Poly (space, rot, affine) ->
+        ( var_type_arrow ~loc space
+        , var_type_arrow ~loc rot
+        , var_type_arrow ~lbl:(Optional "about") ~loc space
+        , var_type_arrow ~loc affine
+        , transforms_2d )
     in
     let gen_sig transform =
       let name =
@@ -241,15 +231,10 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
       in
       let pval_type =
         match transform with
-        | Rotate -> rot_arrow last_arrow
-        | RotateAbout -> rot_arrow @@ space_arrow last_arrow
-        | MultMatrix -> scad_type_arrow ~loc "MultMatrix" @@ last_arrow
-        | Quaternion -> scad_type_arrow ~loc "Quaternion" @@ last_arrow
-        | QuaternionAbout ->
-          scad_type_arrow ~loc "Quaternion" @@ space_arrow @@ last_arrow
-        | VectorRotate -> space_arrow @@ float_type_arrow ~loc @@ last_arrow
-        | VectorRotateAbout ->
-          space_arrow @@ float_type_arrow ~loc @@ space_arrow @@ last_arrow
+        | Rotate -> about_arrow @@ rot_arrow last_arrow
+        | Affine -> affine_arrow last_arrow
+        | Quaternion -> about_arrow @@ scad_type_arrow ~loc "Quaternion" @@ last_arrow
+        | AxisRotate -> about_arrow @@ space_arrow @@ float_type_arrow ~loc @@ last_arrow
         | _ -> space_arrow last_arrow
       in
       psig_value
