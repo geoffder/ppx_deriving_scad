@@ -4,7 +4,7 @@ open! Ast_builder.Default
 type t =
   | D2
   | D3
-  | Poly of string * string
+  | Poly of string * string * string
 
 type error =
   | MixedDimensions
@@ -77,15 +77,20 @@ let rec check ~loc dim = function
     | Some (Poly _) -> Error PolyCollapse
     | _ -> Ok (Some D3) )
   | [%type:
-      ([%t? { ptyp_desc = Ptyp_var s; _ }], [%t? { ptyp_desc = Ptyp_var r; _ }]) Scad.t]
+      ( [%t? { ptyp_desc = Ptyp_var s; _ }]
+      , [%t? { ptyp_desc = Ptyp_var r; _ }]
+      , [%t? { ptyp_desc = Ptyp_var a; _ }] )
+      Scad.t]
   | [%type:
       ( [%t? { ptyp_desc = Ptyp_var s; _ }]
-      , [%t? { ptyp_desc = Ptyp_var r; _ }] )
+      , [%t? { ptyp_desc = Ptyp_var r; _ }]
+      , [%t? { ptyp_desc = Ptyp_var a; _ }] )
       Scad_ml.Scad.t] ->
     ( match dim with
     | Some (D2 | D3) -> Error PolyCollapse
-    | Some (Poly (s', r')) as d when String.equal s s' && String.equal r r' -> Ok d
-    | None -> Ok (Some (Poly (s, r)))
+    | Some (Poly (s', r', a')) as d
+      when String.equal s s' && String.equal r r' && String.equal a a' -> Ok d
+    | None -> Ok (Some (Poly (s, r, a)))
     | _ -> Error PolyMismatch )
   | { ptyp_desc = Ptyp_tuple (hd :: cts); _ } ->
     let f dim' ct =
