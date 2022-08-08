@@ -28,15 +28,15 @@ end = struct
 end
 
 module PolyScads : sig
-  type ('s, 'r) t =
-    { a : ('s, 'r) Scad.t
-    ; b : ('s, 'r) Scad.t
+  type ('s, 'r, 'a) t =
+    { a : ('s, 'r, 'a) Scad.t
+    ; b : ('s, 'r, 'a) Scad.t
     }
   [@@deriving scad]
 end = struct
-  type ('s, 'r) t =
-    { a : ('s, 'r) Scad.t
-    ; b : ('s, 'r) Scad.t
+  type ('s, 'r, 'a) t =
+    { a : ('s, 'r, 'a) Scad.t
+    ; b : ('s, 'r, 'a) Scad.t
     }
   [@@deriving scad]
 end
@@ -131,8 +131,8 @@ let%test "rotate_about_pair" =
   let a = { reg = v3 5. 5. 0.; unit = v3 0. 1. 0. }
   and r = v3 0. 0. (Float.pi /. 2.)
   and p = v3 0. 5. 0. in
-  let rot = rotate_about_pt_vec_pair r p a in
-  Vec3.equal rot.reg (Vec3.rotate_about_pt r p a.reg)
+  let rot = rotate_vec_pair ~about:p r a in
+  Vec3.equal rot.reg (Vec3.rotate ~about:p r a.reg)
   && Vec3.equal rot.unit (Vec3.rotate r a.unit)
 
 let%test "unit_prevents_translate" =
