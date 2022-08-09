@@ -14,7 +14,9 @@ type transform =
   | Mirror
 
 let transforms_2d = [ Translate; Rotate; Zrot; Scale; Mirror; Affine ]
-let transforms_3d = Xrot :: Yrot :: Quaternion :: AxisRotate :: transforms_2d
+
+let transforms_3d =
+  [ Translate; Rotate; Xrot; Yrot; Zrot; AxisRotate; Quaternion; Scale; Mirror; Affine ]
 
 let transform_to_string = function
   | Translate -> "translate"

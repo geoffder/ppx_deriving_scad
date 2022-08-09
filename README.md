@@ -17,12 +17,15 @@ type mark =
 **Generates:**
 ```ocaml
 val translate_mark : Vec3.t -> mark -> mark
+val rotate_mark : ?about:Vec3.t -> Vec3.t -> mark -> mark
+val xrot_mark : ?about:Vec3.t -> float -> mark -> mark
+val yrot_mark : ?about:Vec3.t -> float -> mark -> mark
+val zrot_mark : ?about:Vec3.t -> float -> mark -> mark
+val axis_rotate_mark : ?about:Vec3.t -> Vec3.t -> float -> mark -> mark
+val quaternion_mark : ?about:Vec3.t -> Quaternion.t -> mark -> mark
 val scale_mark : Vec3.t -> mark -> mark
-val rotate_mark : Vec3.t -> mark -> mark
-val rotate_about_pt_mark : Vec3.t -> Vec3.t -> mark -> mark
-val quaternion_mark : Quaternion.t -> mark -> mark
-val quaternion_about_pt_mark : Quaternion.t -> Vec3.t -> mark -> mark
 val mirror_mark : Vec3.t -> mark -> mark
+val affine_mark : Affine3.t -> mark -> mark
 ```
 
 If the name of the type being derived is `t`, then the functions generated (and
@@ -41,12 +44,15 @@ module Mark : sig
     }
 
   val translate : Vec3.t -> t -> t
+  val rotate : ?about:Vec3.t -> Vec3.t -> t -> t
+  val xrot : ?about:Vec3.t -> float -> t -> t
+  val yrot : ?about:Vec3.t -> float -> t -> t
+  val zrot : ?about:Vec3.t -> float -> t -> t
+  val axis_rotate : ?about:Vec3.t -> Vec3.t -> float -> t -> t
+  val quaternion : ?about:Vec3.t -> Quaternion.t -> t -> t
   val scale : Vec3.t -> t -> t
-  val rotate : Vec3.t -> t -> t
-  val rotate_about_pt : Vec3.t -> Vec3.t -> t -> t
-  val quaternion : Quaternion.t -> t -> t
-  val quaternion_about_pt : Quaternion.t -> Vec3.t -> t -> t
   val mirror : Vec3.t -> t -> t
+  val affine : Affine3.t -> t -> t
 end = struct
   type t =
     { scad : Scad.three_d Scad.t
@@ -64,10 +70,11 @@ module Tris : sig
   type t = (Vec2.t * Vec2.t * Vec2.t) list
 
   val translate : Vec2.t -> t -> t
-  val rotate : float -> t -> t
-  val rotate_about_pt : float -> Vec2.t -> t -> t
+  val rotate : ?about:Vec2.t -> float -> t -> t
+  val zrot : ?about:Vec2.t -> float -> t -> t
   val scale : Vec2.t -> t -> t
   val mirror : Vec2.t -> t -> t
+  val affine : Affine2.t -> t -> t
 end = struct
   type t = (Vec2.t * Vec2.t * Vec2.t) list [@@deriving scad]
 end
@@ -101,14 +108,14 @@ scope of the derived type.
 Annotating types in module sigs and `.mli` files will generate the relevant type signatures.
 ``` ocaml
 module PolyScads : sig
-  type ('s, 'r) t =
-    { a : ('s, 'r) Scad.t
-    ; b : ('s, 'r) Scad.t
+  type ('s, 'r, 'a) t =
+    { a : ('s, 'r, 'a) Scad.t
+    ; b : ('s, 'r, 'a) Scad.t
     } [@@deriving scad]
 end = struct
-  type ('s, 'r) t =
-    { a : ('s, 'r) Scad.t
-    ; b : ('s, 'r) Scad.t
+  type ('s, 'r, 'a) t =
+    { a : ('s, 'r, 'a) Scad.t
+    ; b : ('s, 'r, 'a) Scad.t
     } [@@deriving scad]
 end
 ```
@@ -126,8 +133,8 @@ transformations that would cause them to lose thier identity as such, or rotate
 about anything other than the world origin. Thus:
 
   - `translate` and `scale` will not be applied (identity function instead)
-  - `{rotate,quaternion}_about_pt` will be replaced by their pivot translation
-    free counterparts
+  - the `?about` parameter will not be passed to the rotation functions
+    (`rotate`, `axis_rotate`, and `quaternion`)
 
 **Usage:**
 ``` ocaml
