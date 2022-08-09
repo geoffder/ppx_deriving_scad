@@ -4,19 +4,25 @@ open! Ast_builder.Default
 type transform =
   | Translate
   | Rotate
+  | Xrot
+  | Yrot
+  | Zrot
   | Quaternion
   | AxisRotate
   | Affine
   | Scale
   | Mirror
 
-let transforms_2d = [ Translate; Rotate; Scale; Mirror; Affine ]
-let transforms_3d = Quaternion :: AxisRotate :: transforms_2d
+let transforms_2d = [ Translate; Rotate; Zrot; Scale; Mirror; Affine ]
+let transforms_3d = Xrot :: Yrot :: Quaternion :: AxisRotate :: transforms_2d
 
 let transform_to_string = function
   | Translate -> "translate"
   | Scale -> "scale"
   | Rotate -> "rotate"
+  | Xrot -> "xrot"
+  | Yrot -> "yrot"
+  | Zrot -> "zrot"
   | Quaternion -> "quaternion"
   | AxisRotate -> "axis_rotate"
   | Mirror -> "mirror"
@@ -28,7 +34,7 @@ let transform_to_rev_params is_unit transform =
   match transform with
   | Translate -> [ Nolabel, "_p" ]
   | Scale -> [ Nolabel, "_s" ]
-  | Rotate -> (Nolabel, "r") :: about
+  | Rotate | Xrot | Yrot | Zrot -> (Nolabel, "r") :: about
   | Quaternion -> (Nolabel, "q") :: about
   | AxisRotate -> (Nolabel, "a") :: (Nolabel, "ax") :: about
   | Mirror -> [ Nolabel, "ax" ]
@@ -232,6 +238,7 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
       let pval_type =
         match transform with
         | Rotate -> about_arrow @@ rot_arrow last_arrow
+        | Xrot | Yrot | Zrot -> about_arrow @@ float_type_arrow ~loc @@ last_arrow
         | Affine -> affine_arrow last_arrow
         | Quaternion -> about_arrow @@ scad_type_arrow ~loc "Quaternion" @@ last_arrow
         | AxisRotate -> about_arrow @@ space_arrow @@ float_type_arrow ~loc @@ last_arrow
