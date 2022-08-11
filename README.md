@@ -17,6 +17,9 @@ type mark =
 **Generates:**
 ```ocaml
 val translate_mark : Vec3.t -> mark -> mark
+val xtrans_mark : float -> mark -> mark
+val ytrans_mark : float -> mark -> mark
+val ztrans_mark : float -> mark -> mark
 val rotate_mark : ?about:Vec3.t -> Vec3.t -> mark -> mark
 val xrot_mark : ?about:Vec3.t -> float -> mark -> mark
 val yrot_mark : ?about:Vec3.t -> float -> mark -> mark
@@ -44,6 +47,9 @@ module Mark : sig
     }
 
   val translate : Vec3.t -> t -> t
+  val xtrans : float -> t -> t
+  val ytrans : float -> t -> t
+  val ztrans : float -> t -> t
   val rotate : ?about:Vec3.t -> Vec3.t -> t -> t
   val xrot : ?about:Vec3.t -> float -> t -> t
   val yrot : ?about:Vec3.t -> float -> t -> t
@@ -70,6 +76,8 @@ module Tris : sig
   type t = (Vec2.t * Vec2.t * Vec2.t) list
 
   val translate : Vec2.t -> t -> t
+  val xtrans : float -> t -> t
+  val ytrans : float -> t -> t
   val rotate : ?about:Vec2.t -> float -> t -> t
   val zrot : ?about:Vec2.t -> float -> t -> t
   val scale : Vec2.t -> t -> t
