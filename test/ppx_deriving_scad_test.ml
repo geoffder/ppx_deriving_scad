@@ -27,6 +27,10 @@ end = struct
   [@@deriving scad]
 end
 
+module type FunType = sig
+  type t = float -> Vec3.t [@@deriving scad]
+end
+
 module PolyScads : sig
   type ('s, 'r, 'a) t =
     { a : ('s, 'r, 'a) Scad.t

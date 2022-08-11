@@ -100,6 +100,7 @@ let rec check ~loc dim = function
   | { ptyp_desc = Ptyp_constr (_, []); _ } -> Ok dim
   | { ptyp_desc = Ptyp_constr (_, (arg :: _ as args)); _ } ->
     if List.for_all (Fun.negate Util.is_constr) args then Ok dim else check ~loc dim arg
+  | { ptyp_desc = Ptyp_arrow (_, _, ct); _ } -> check ~loc dim ct
   (* TODO: consider allowing type variables if they can be pegged
          to a Scad.t's 'space parameter (v2 or v3). *)
   | ct -> Location.raise_errorf ~loc "Unhandled type: %s" (string_of_core_type ct)
