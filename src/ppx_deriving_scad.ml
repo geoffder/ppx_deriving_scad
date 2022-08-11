@@ -4,6 +4,9 @@ open! Ast_builder.Default
 type transform =
   | Translate
   | Rotate
+  | Xtrans
+  | Ytrans
+  | Ztrans
   | Xrot
   | Yrot
   | Zrot
@@ -13,13 +16,29 @@ type transform =
   | Scale
   | Mirror
 
-let transforms_2d = [ Translate; Rotate; Zrot; Scale; Mirror; Affine ]
+let transforms_2d = [ Translate; Xtrans; Ytrans; Rotate; Zrot; Scale; Mirror; Affine ]
 
 let transforms_3d =
-  [ Translate; Rotate; Xrot; Yrot; Zrot; AxisRotate; Quaternion; Scale; Mirror; Affine ]
+  [ Translate
+  ; Xtrans
+  ; Ytrans
+  ; Ztrans
+  ; Rotate
+  ; Xrot
+  ; Yrot
+  ; Zrot
+  ; AxisRotate
+  ; Quaternion
+  ; Scale
+  ; Mirror
+  ; Affine
+  ]
 
 let transform_to_string = function
   | Translate -> "translate"
+  | Xtrans -> "xtrans"
+  | Ytrans -> "ytrans"
+  | Ztrans -> "ztrans"
   | Scale -> "scale"
   | Rotate -> "rotate"
   | Xrot -> "xrot"
@@ -34,7 +53,7 @@ let transform_to_string = function
 let transform_to_rev_params is_unit transform =
   let about = if is_unit then [] else [ Optional "about", "_p" ] in
   match transform with
-  | Translate -> [ Nolabel, "_p" ]
+  | Translate | Xtrans | Ytrans | Ztrans -> [ Nolabel, "_p" ]
   | Scale -> [ Nolabel, "_s" ]
   | Rotate | Xrot | Yrot | Zrot -> (Nolabel, "r") :: about
   | Quaternion -> (Nolabel, "q") :: about
@@ -44,7 +63,7 @@ let transform_to_rev_params is_unit transform =
 
 let transform_to_names is_unit transform =
   match is_unit, transform with
-  | true, (Translate | Scale) -> None
+  | true, (Translate | Xtrans | Ytrans | Ztrans | Scale) -> None
   | u, trans -> Some (transform_to_string trans, transform_to_rev_params u trans)
 
 let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
@@ -240,6 +259,7 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
       let pval_type =
         match transform with
         | Rotate -> about_arrow @@ rot_arrow last_arrow
+        | Xtrans | Ytrans | Ztrans -> float_type_arrow ~loc @@ last_arrow
         | Xrot | Yrot | Zrot -> about_arrow @@ float_type_arrow ~loc @@ last_arrow
         | Affine -> affine_arrow last_arrow
         | Quaternion -> about_arrow @@ scad_type_arrow ~loc "Quaternion" @@ last_arrow
