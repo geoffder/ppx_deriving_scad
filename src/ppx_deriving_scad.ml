@@ -95,14 +95,14 @@ let transform_expr ~loc ~jane ~transform ~kind (ct : core_type) =
         aux attrs (Util.list_map_expr :: funcs) typ
       | [%type: ([%t? typ], [%t? _]) result] | [%type: ([%t? typ], [%t? _]) Result.t] ->
         aux attrs (Util.result_map_expr :: funcs) typ
-      | [%type: ([%t? _], [%t? _]) Scad.t]
+      | [%type: ([%t? _], [%t? _], [%t? _]) Scad.t]
       | [%type: Scad.d2]
       | [%type: Scad.d3]
-      | [%type: ([%t? _], [%t? _]) Scad_ml.Scad.t]
+      | [%type: ([%t? _], [%t? _], [%t? _]) Scad_ml.Scad.t]
       | [%type: Scad_ml.Scad.d2]
       | [%type: Scad_ml.Scad.d3] -> inner_expr attrs (fix_id "Scad"), funcs
-      | [%type: v2] | [%type: Scad_ml.v2] -> inner_expr attrs (fix_id "Vec2"), funcs
-      | [%type: v3] | [%type: Scad_ml.v3] -> inner_expr attrs (fix_id "Vec3"), funcs
+      | [%type: v2] | [%type: Scad_ml.v2] -> inner_expr attrs (fix_id "V2"), funcs
+      | [%type: v3] | [%type: Scad_ml.v3] -> inner_expr attrs (fix_id "V3"), funcs
       | { ptyp_desc = Ptyp_tuple cts; _ } ->
         let tup_expr =
           let argn n = Printf.sprintf "arg%i" n in
@@ -222,16 +222,16 @@ let transformer_intf ~ctxt (_rec_flag, type_declarations) =
     let space_arrow, rot_arrow, about_arrow, affine_arrow, transforms =
       match dim with
       | D2 ->
-        ( scad_type_arrow ~loc "Vec2"
+        ( scad_type_arrow ~loc "V2"
         , float_type_arrow ~loc
-        , scad_type_arrow ~lbl:(Optional "about") ~loc "Vec2"
+        , scad_type_arrow ~lbl:(Optional "about") ~loc "V2"
         , scad_type_arrow ~loc "Affine2"
         , transforms_2d )
       | D3 ->
-        let v3_arrow = scad_type_arrow ~loc "Vec3" in
+        let v3_arrow = scad_type_arrow ~loc "V3" in
         ( v3_arrow
         , v3_arrow
-        , scad_type_arrow ~lbl:(Optional "about") ~loc "Vec3"
+        , scad_type_arrow ~lbl:(Optional "about") ~loc "V3"
         , scad_type_arrow ~loc "Affine3"
         , transforms_3d )
       | Poly (space, rot, affine) ->

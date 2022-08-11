@@ -2,8 +2,8 @@
 
     A PPX deriver that generates functions for the spatial transformation of user defined
     abstract and record types containing types for which said transformation functions are
-    defined, in particular, the [Scad_ml.Scad.t], [Scad_ml.Vec3.t], and [Scad_ml.Vec2.t]
-    types of the {{:https://github.com/namachan10777/scad-ml} Scad_ml library}.
+    defined, in particular, the [Scad_ml.Scad.t], [Scad_ml.V3.t], and [Scad_ml.V2.t] types
+    of the {{:https://github.com/namachan10777/scad-ml} Scad_ml library}.
 
     {b For example:}
 
@@ -12,7 +12,7 @@
 
       type mark =
         { scad : Scad.d3
-        ; centre : Vec3.t
+        ; centre : V3.t
         }
       [@@deriving scad]
     ]}
@@ -20,18 +20,18 @@
     {b Generates:}
 
     {[
-      val translate_mark : Vec3.t -> mark -> mark
+      val translate_mark : V3.t -> mark -> mark
       val xtrans_mark : float -> mark -> mark
       val ytrans_mark : float -> mark -> mark
       val ztrans_mark : float -> mark -> mark
-      val rotate_mark : ?about:Vec3.t -> Vec3.t -> mark -> mark
-      val xrot_mark : ?about:Vec3.t -> float -> mark -> mark
-      val yrot_mark : ?about:Vec3.t -> float -> mark -> mark
-      val zrot_mark : ?about:Vec3.t -> float -> mark -> mark
-      val axis_rotate_mark : ?about:Vec3.t -> Vec3.t -> float -> mark -> mark
-      val quaternion_mark : ?about:Vec3.t -> Quaternion.t -> mark -> mark
-      val scale_mark : Vec3.t -> mark -> mark
-      val mirror_mark : Vec3.t -> mark -> mark
+      val rotate_mark : ?about:V3.t -> V3.t -> mark -> mark
+      val xrot_mark : ?about:V3.t -> float -> mark -> mark
+      val yrot_mark : ?about:V3.t -> float -> mark -> mark
+      val zrot_mark : ?about:V3.t -> float -> mark -> mark
+      val axis_rotate_mark : ?about:V3.t -> V3.t -> float -> mark -> mark
+      val quaternion_mark : ?about:V3.t -> Quaternion.t -> mark -> mark
+      val scale_mark : V3.t -> mark -> mark
+      val mirror_mark : V3.t -> mark -> mark
       val affine_mark : Affine3.t -> mark -> mark
     ]}
 
@@ -46,26 +46,26 @@
       module Mark : sig
         type t =
           { scad : Scad.d3
-          ; centre : Vec3.t
+          ; centre : V3.t
           }
 
-        val translate : Vec3.t -> t -> t
+        val translate : V3.t -> t -> t
         val xtrans : float -> t -> t
         val ytrans : float -> t -> t
         val ztrans : float -> t -> t
-        val rotate : ?about:Vec3.t -> Vec3.t -> t -> t
-        val xrot : ?about:Vec3.t -> float -> t -> t
-        val yrot : ?about:Vec3.t -> float -> t -> t
-        val zrot : ?about:Vec3.t -> float -> t -> t
-        val axis_rotate : ?about:Vec3.t -> Vec3.t -> float -> t -> t
-        val quaternion : ?about:Vec3.t -> Quaternion.t -> t -> t
-        val scale : Vec3.t -> t -> t
-        val mirror : Vec3.t -> t -> t
+        val rotate : ?about:V3.t -> V3.t -> t -> t
+        val xrot : ?about:V3.t -> float -> t -> t
+        val yrot : ?about:V3.t -> float -> t -> t
+        val zrot : ?about:V3.t -> float -> t -> t
+        val axis_rotate : ?about:V3.t -> V3.t -> float -> t -> t
+        val quaternion : ?about:V3.t -> Quaternion.t -> t -> t
+        val scale : V3.t -> t -> t
+        val mirror : V3.t -> t -> t
         val affine : Affine3.t -> t -> t
       end = struct
         type t =
           { scad : Scad.d3
-          ; centre : Vec3.t
+          ; centre : V3.t
           }
         [@@deriving scad]
       end
@@ -80,18 +80,18 @@
 
     {[
       module Tris : sig
-        type t = (Vec2.t * Vec2.t * Vec2.t) list
+        type t = (V2.t * V2.t * V2.t) list
 
-        val translate : Vec2.t -> t -> t
+        val translate : V2.t -> t -> t
         val xtrans : float -> t -> t
         val ytrans : float -> t -> t
-        val rotate : ?about:Vec2.t -> float -> t -> t
-        val zrot : ?about:Vec2.t -> float -> t -> t
-        val scale : Vec2.t -> t -> t
-        val mirror : Vec2.t -> t -> t
+        val rotate : ?about:V2.t -> float -> t -> t
+        val zrot : ?about:V2.t -> float -> t -> t
+        val scale : V2.t -> t -> t
+        val mirror : V2.t -> t -> t
         val affine : Affine2.t -> t -> t
       end = struct
-        type t = (Vec2.t * Vec2.t * Vec2.t) list [@@deriving scad]
+        type t = (V2.t * V2.t * V2.t) list [@@deriving scad]
       end
     ]}
 
@@ -104,11 +104,11 @@
     {[
       module IntMap = Map.Make (Int)
 
-      type v3_map = Vec3.t IntMap.t [@@deriving scad]
+      type v3_map = V3.t IntMap.t [@@deriving scad]
     ]}
 
     Here, [IntMap.map] will be used to apply transformations to the contained
-    [Scad_ml.Vec3.t] elements. The expected map function should obey the convention of the
+    [Scad_ml.V3.t] elements. The expected map function should obey the convention of the
     function [f] being the first {i positional} argument. If you are following the
     conventions of JaneStreet and/or have [base]/[core] open, then you may use
     [\[@@deriving scad_jane\]] which defaults to expecting [map] functions to accept a
@@ -119,7 +119,7 @@
 
     If the constructor type is not named [t] as in this example, then this ppx will
     attempt to use a function with the suffix [_map]. For example, if the type above was
-    instead [Vec3.t int_map], the function [int_map_map] will be expected in the scope of
+    instead [V3.t int_map], the function [int_map_map] will be expected in the scope of
     the derived type.
 
     {1 Intf generation and dimensional polymorphism}
@@ -166,7 +166,7 @@
     {[
       type plane =
         { scad : Scad.d3
-        ; normal : Vec3.t [@scad.unit]
+        ; normal : V3.t [@scad.unit]
         }
       [@@deriving scad]
     ]}
@@ -177,7 +177,7 @@
       let true =
         let plane = { scad = Scad.cube (v3 10. 10. 0.001); normal = v3 0. 0. 1. } in
         let trans = plane_translate (v3 5. 5. 0.) plane in
-        Vec3.equal plane.normal trans.normal
+        V3.equal plane.normal trans.normal
     ]}
 
     {2 \[\@scad.ignore\]}
@@ -190,7 +190,7 @@
     {[
       type mark =
         { scad : Scad.d3
-        ; centre : Vec3.t
+        ; centre : V3.t
         ; id : int [@scad.ignore]
         }
       [@@deriving scad]
@@ -235,7 +235,7 @@
     {2 \[\@scad.d2\] and \[\@scad.d3\]}
 
     When the dimensionality of a type is ambiguous (e.g. containing no fields with
-    concretely dimensional types from [Scad_ml] such as [Scad.d3], or [Vec2.t]), these
+    concretely dimensional types from [Scad_ml] such as [Scad.d3], or [V2.t]), these
     annotations should be used to specify the correct set of functions/signatures to be
     generated.
 

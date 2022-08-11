@@ -2,7 +2,7 @@
 `ppx_deriving_scad` is a PPX deriver that generates functions for the spatial
 transformation of user defined abstract and record types containing types for
 which said transformation functions are defined, in particular, the `Scad.t`,
-`Vec3.t`, and `Vec2.t` types of the [Scad_ml library](https://github.com/namachan10777/scad-ml).
+`V3.t`, and `V2.t` types of the [Scad_ml library](https://github.com/namachan10777/scad-ml).
 
 **For example:**
 ```ocaml
@@ -10,24 +10,24 @@ open Scad_ml
 
 type mark =
   { scad : Scad.d3
-  ; centre : Vec3.t
+  ; centre : V3.t
   }
   [@@deriving scad]
 ```
 **Generates:**
 ```ocaml
-val translate_mark : Vec3.t -> mark -> mark
+val translate_mark : V3.t -> mark -> mark
 val xtrans_mark : float -> mark -> mark
 val ytrans_mark : float -> mark -> mark
 val ztrans_mark : float -> mark -> mark
-val rotate_mark : ?about:Vec3.t -> Vec3.t -> mark -> mark
-val xrot_mark : ?about:Vec3.t -> float -> mark -> mark
-val yrot_mark : ?about:Vec3.t -> float -> mark -> mark
-val zrot_mark : ?about:Vec3.t -> float -> mark -> mark
-val axis_rotate_mark : ?about:Vec3.t -> Vec3.t -> float -> mark -> mark
-val quaternion_mark : ?about:Vec3.t -> Quaternion.t -> mark -> mark
-val scale_mark : Vec3.t -> mark -> mark
-val mirror_mark : Vec3.t -> mark -> mark
+val rotate_mark : ?about:V3.t -> V3.t -> mark -> mark
+val xrot_mark : ?about:V3.t -> float -> mark -> mark
+val yrot_mark : ?about:V3.t -> float -> mark -> mark
+val zrot_mark : ?about:V3.t -> float -> mark -> mark
+val axis_rotate_mark : ?about:V3.t -> V3.t -> float -> mark -> mark
+val quaternion_mark : ?about:V3.t -> Quaternion.t -> mark -> mark
+val scale_mark : V3.t -> mark -> mark
+val mirror_mark : V3.t -> mark -> mark
 val affine_mark : Affine3.t -> mark -> mark
 ```
 
@@ -43,26 +43,26 @@ open Scad_ml
 module Mark : sig
   type t =
     { scad : Scad.d3
-    ; centre : Vec3.t
+    ; centre : V3.t
     }
 
-  val translate : Vec3.t -> t -> t
+  val translate : V3.t -> t -> t
   val xtrans : float -> t -> t
   val ytrans : float -> t -> t
   val ztrans : float -> t -> t
-  val rotate : ?about:Vec3.t -> Vec3.t -> t -> t
-  val xrot : ?about:Vec3.t -> float -> t -> t
-  val yrot : ?about:Vec3.t -> float -> t -> t
-  val zrot : ?about:Vec3.t -> float -> t -> t
-  val axis_rotate : ?about:Vec3.t -> Vec3.t -> float -> t -> t
-  val quaternion : ?about:Vec3.t -> Quaternion.t -> t -> t
-  val scale : Vec3.t -> t -> t
-  val mirror : Vec3.t -> t -> t
+  val rotate : ?about:V3.t -> V3.t -> t -> t
+  val xrot : ?about:V3.t -> float -> t -> t
+  val yrot : ?about:V3.t -> float -> t -> t
+  val zrot : ?about:V3.t -> float -> t -> t
+  val axis_rotate : ?about:V3.t -> V3.t -> float -> t -> t
+  val quaternion : ?about:V3.t -> Quaternion.t -> t -> t
+  val scale : V3.t -> t -> t
+  val mirror : V3.t -> t -> t
   val affine : Affine3.t -> t -> t
 end = struct
   type t =
     { scad : Scad.three_d Scad.t
-    ; centre : Vec3.t
+    ; centre : V3.t
     }
     [@@deriving scad]
 end
@@ -73,18 +73,18 @@ The `list`, `option`, and `result` types, as well as **tuples**, are automatical
 mapped over, without any additional annotation or functions provided.
 ``` ocaml
 module Tris : sig
-  type t = (Vec2.t * Vec2.t * Vec2.t) list
+  type t = (V2.t * V2.t * V2.t) list
 
-  val translate : Vec2.t -> t -> t
+  val translate : V2.t -> t -> t
   val xtrans : float -> t -> t
   val ytrans : float -> t -> t
-  val rotate : ?about:Vec2.t -> float -> t -> t
-  val zrot : ?about:Vec2.t -> float -> t -> t
-  val scale : Vec2.t -> t -> t
-  val mirror : Vec2.t -> t -> t
+  val rotate : ?about:V2.t -> float -> t -> t
+  val zrot : ?about:V2.t -> float -> t -> t
+  val scale : V2.t -> t -> t
+  val mirror : V2.t -> t -> t
   val affine : Affine2.t -> t -> t
 end = struct
-  type t = (Vec2.t * Vec2.t * Vec2.t) list [@@deriving scad]
+  type t = (V2.t * V2.t * V2.t) list [@@deriving scad]
 end
 ```
 
@@ -95,10 +95,10 @@ module, or for the non-`t` named type, using the same naming conventions as
 explained above.
 ``` ocaml
 module IntMap = Map.Make (Int)
-type vec_map = Vec3.t IntMap.t [@@deriving scad]
+type vec_map = V3.t IntMap.t [@@deriving scad]
 ```
 Here, `IntMap.map` will be used to apply transformations to the contained
-`Vec3.t` elements. The expected map function should obey the convention of the
+`V3.t` elements. The expected map function should obey the convention of the
 function `f` being the first *positional* argument. If you are following the
 conventions of Jane Street and/or have `base`/`core` open, then you may use
 `[@@deriving scad_jane]` which defaults to expecting `map` functions to accept a
@@ -109,7 +109,7 @@ do not match your default convention.
 
 If the constructor type is not named `t` as in this example, then this ppx will
 attempt to use a function with the suffix `_map`. For example, if the type above
-was instead `Vec3.t int_map`, the function `int_map_map` will be expected in the
+was instead `V3.t int_map`, the function `int_map_map` will be expected in the
 scope of the derived type.
 
 ## Intf generation
@@ -148,7 +148,7 @@ about anything other than the world origin. Thus:
 ``` ocaml
 type plane =
   { scad : Scad.d3
-  ; normal : Vec3.t [@scad.unit]
+  ; normal : V3.t [@scad.unit]
   } [@@deriving scad]
 ```
 In this case the following would hold:
@@ -160,7 +160,7 @@ let true =
     }
   in
   let trans = plane_translate (v3 5. 5. 0.) plane in
-  Vec3.equal plane.normal trans.normal
+  V3.equal plane.normal trans.normal
 ```
 
 ### [@scad.ignore]
@@ -173,7 +173,7 @@ type for which the relevant functions have not been implemented.
 ``` ocaml
 type mark =
   { scad : Scad.d3
-  ; centre : Vec3.t
+  ; centre : V3.t
   ; id : int [@scad.ignore]
   } [@@deriving scad]
 ```
@@ -218,7 +218,7 @@ end
 ### [@scad.d2] and [@scad.d3]
 
 When the dimensionality of a type is ambiguous (e.g. containing no fields with
-concretely dimensional types from `Scad_ml` such as `Scad.d3`, or `Vec2.t`), these
+concretely dimensional types from `Scad_ml` such as `Scad.d3`, or `V2.t`), these
 annotations should be used to specify the correct set of functions/signatures to be
 generated.
 

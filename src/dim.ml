@@ -40,16 +40,18 @@ let rec check ~loc dim = function
   | [%type: ([%t? typ], [%t? _]) Result.t] -> check ~loc dim typ
   | [%type: v2]
   | [%type: Scad_ml.v2]
-  | [%type: Vec2.t]
-  | [%type: Scad_ml.Vec2.t]
+  | [%type: V2.t]
+  | [%type: Scad_ml.V2.t]
   | [%type: Path2.t]
   | [%type: Scad_ml.Path2.t]
   | [%type: Poly2.t]
   | [%type: Scad_ml.Poly2.t]
   | [%type: Bezier2.t]
   | [%type: Scad_ml.Bezier2.t]
-  | [%type: (Vec2.t, float) Scad.t]
-  | [%type: (Vec2.t, float) Scad_ml.Scad.t]
+  | [%type: (V2.t, float, Affine2.t) Scad.t]
+  | [%type: (v2, float, Affine2.t) Scad.t]
+  | [%type: (Scad_ml.V2.t, float, Scad_ml.Affine2.t) Scad_ml.Scad.t]
+  | [%type: (Scad_ml.v2, float, Scad_ml.Affine2.t) Scad_ml.Scad.t]
   | [%type: Scad.d2]
   | [%type: Scad_ml.Scad.d2] ->
     ( match dim with
@@ -58,8 +60,8 @@ let rec check ~loc dim = function
     | _ -> Ok (Some D2) )
   | [%type: v3]
   | [%type: Scad_ml.v3]
-  | [%type: Vec3.t]
-  | [%type: Scad_ml.Vec3.t]
+  | [%type: V3.t]
+  | [%type: Scad_ml.V3.t]
   | [%type: Path3.t]
   | [%type: Scad_ml.Path3.t]
   | [%type: Poly3.t]
@@ -68,8 +70,10 @@ let rec check ~loc dim = function
   | [%type: Scad_ml.Bezier3.t]
   | [%type: Mesh.t]
   | [%type: Scad_ml.Mesh.t]
-  | [%type: (Vec3.t, Vec3.t) Scad.t]
-  | [%type: (Vec3.t, Vec3.t) Scad_ml.Scad.t]
+  | [%type: (V3.t, V3.t, Affine3.t) Scad.t]
+  | [%type: (v3, v3, Affine3.t) Scad.t]
+  | [%type: (Scad_ml.V3.t, Scad_ml.V3.t, Scad_ml.Affine3.t) Scad_ml.Scad.t]
+  | [%type: (Scad_ml.v3, Scad_ml.v3, Scad_ml.Affine3.t) Scad_ml.Scad.t]
   | [%type: Scad.d3]
   | [%type: Scad_ml.Scad.d3] ->
     ( match dim with

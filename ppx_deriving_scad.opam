@@ -5,7 +5,7 @@ description: """
 [@@deriving scad] generates functions for the
 spatial transformation of user defined abstract and record types containing
 types for which said transformation functions are defined, in particular, the
-`Scad.t` and `Vec3.t` types of the Scad_ml library."""
+`Scad.t` and `V3.t` types of the Scad_ml library."""
 maintainer: ["Geoff deRosenroll<geoffderosenroll@gmail.com>"]
 authors: ["Geoff deRosenroll<geoffderosenroll@gmail.com>"]
 license: "AGPL-3.0-or-later"

@@ -19,7 +19,7 @@
  (name ppx_deriving_scad)
  (synopsis "PPX Deriver for Scad_ml transformation functions")
  (description
-  "[@@deriving scad] generates functions for the\nspatial transformation of user defined abstract and record types containing\ntypes for which said transformation functions are defined, in particular, the\n`Scad.t` and `Vec3.t` types of the Scad_ml library.")
+  "[@@deriving scad] generates functions for the\nspatial transformation of user defined abstract and record types containing\ntypes for which said transformation functions are defined, in particular, the\n`Scad.t` and `V3.t` types of the Scad_ml library.")
  (depends
   (ocaml
    (>= 4.08.0))
