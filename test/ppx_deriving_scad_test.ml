@@ -51,6 +51,12 @@ end = struct
   type t = { pts : V3.t list } [@@deriving scad]
 end
 
+module PtsList : sig
+  type t = (Pts.t list[@scad.d3]) [@@deriving scad]
+end = struct
+  type t = (Pts.t list[@scad.d3]) [@@deriving scad]
+end
+
 module OptOpt : sig
   type t = { vec : V3.t option option } [@@deriving scad]
 end = struct
