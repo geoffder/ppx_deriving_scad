@@ -3,7 +3,7 @@
     A PPX deriver that generates functions for the spatial transformation of user defined
     abstract and record types containing types for which said transformation functions are
     defined, in particular, the [Scad_ml.Scad.t], [Scad_ml.V3.t], and [Scad_ml.V2.t] types
-    of the {{:https://github.com/namachan10777/scad-ml} Scad_ml library}.
+    of the {{:https://github.com/geoffder/scad-ml} Scad_ml library}.
 
     {b For example:}
 
